@@ -90,8 +90,13 @@ export default function BookingScreen() {
   const tripDurationMin = Math.max(3, Math.round(distanceKm * 2.4));
 
   const selectedPriceCents = useMemo(
-    () => computePriceCents(distanceKm, selectedOption.pricePerKmCents),
-    [distanceKm, selectedOption.pricePerKmCents],
+    () =>
+      computePriceCents(
+        distanceKm,
+        selectedOption.pricePerKmCents,
+        selectedOption.minPriceCents,
+      ),
+    [distanceKm, selectedOption.pricePerKmCents, selectedOption.minPriceCents],
   );
 
   const defaultPayment = payments.find((p) => p.id === defaultPaymentId);

@@ -29,7 +29,11 @@ export function RideOptionRow({
 }: Props) {
   const colors = useColors();
   const iconName = ICONS[option.tier];
-  const priceCents = computePriceCents(distanceKm, option.pricePerKmCents);
+  const priceCents = computePriceCents(
+    distanceKm,
+    option.pricePerKmCents,
+    option.minPriceCents,
+  );
 
   return (
     <Pressable

@@ -130,8 +130,6 @@ export const DRIVERS: Driver[] = [
   },
 ];
 
-export const PRICE_PER_KM_CENTS = 800;
-
 export const RIDE_OPTIONS: RideOption[] = [
   {
     tier: "moto",
@@ -139,7 +137,8 @@ export const RIDE_OPTIONS: RideOption[] = [
     description: "Chega mais rápido desviando do trânsito",
     capacity: 1,
     etaMinutes: 2,
-    pricePerKmCents: PRICE_PER_KM_CENTS,
+    pricePerKmCents: 500,
+    minPriceCents: 500,
   },
   {
     tier: "car",
@@ -147,7 +146,8 @@ export const RIDE_OPTIONS: RideOption[] = [
     description: "Conforto e espaço para até 4 pessoas",
     capacity: 4,
     etaMinutes: 4,
-    pricePerKmCents: PRICE_PER_KM_CENTS,
+    pricePerKmCents: 1000,
+    minPriceCents: 800,
   },
 ];
 
@@ -221,6 +221,7 @@ export function estimateDistanceKm(placeId: string): number {
 export function computePriceCents(
   distanceKm: number,
   pricePerKmCents: number,
+  minPriceCents: number,
 ): number {
-  return Math.max(500, Math.round(distanceKm * pricePerKmCents));
+  return Math.max(minPriceCents, Math.round(distanceKm * pricePerKmCents));
 }
