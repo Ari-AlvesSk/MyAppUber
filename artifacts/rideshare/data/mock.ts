@@ -67,6 +67,7 @@ export const DRIVERS: Driver[] = [
     name: "Marcus Chen",
     rating: 4.93,
     trips: 4218,
+    vehicleType: "car",
     car: "Tesla Model 3",
     plate: "8KZA294",
     color: "Pearl White",
@@ -77,6 +78,7 @@ export const DRIVERS: Driver[] = [
     name: "Aisha Patel",
     rating: 4.97,
     trips: 6802,
+    vehicleType: "car",
     car: "Toyota Camry Hybrid",
     plate: "6BLM118",
     color: "Midnight Black",
@@ -84,58 +86,66 @@ export const DRIVERS: Driver[] = [
   },
   {
     id: "d3",
-    name: "Diego Vargas",
-    rating: 4.88,
-    trips: 1956,
-    car: "Honda Civic",
-    plate: "9RPT042",
-    color: "Silver",
-    photoSeed: "Diego",
-  },
-  {
-    id: "d4",
     name: "Sofia Rossi",
     rating: 4.99,
     trips: 9320,
+    vehicleType: "car",
     car: "BMW 5 Series",
     plate: "4XHN770",
     color: "Carbon Grey",
     photoSeed: "Sofia",
   },
+  {
+    id: "d4",
+    name: "Diego Vargas",
+    rating: 4.91,
+    trips: 3147,
+    vehicleType: "moto",
+    car: "Honda CB 500F",
+    plate: "9RPT042",
+    color: "Matte Black",
+    photoSeed: "Diego",
+  },
+  {
+    id: "d5",
+    name: "Lucas Almeida",
+    rating: 4.95,
+    trips: 5420,
+    vehicleType: "moto",
+    car: "Yamaha MT-07",
+    plate: "2KFL880",
+    color: "Racing Blue",
+    photoSeed: "Lucas",
+  },
+  {
+    id: "d6",
+    name: "Camila Torres",
+    rating: 4.89,
+    trips: 2876,
+    vehicleType: "moto",
+    car: "Kawasaki Z400",
+    plate: "7XGD521",
+    color: "Lime Green",
+    photoSeed: "Camila",
+  },
 ];
 
 export const RIDE_OPTIONS: RideOption[] = [
   {
-    tier: "economy",
-    name: "Lite",
-    description: "Affordable, everyday rides",
-    capacity: 4,
-    etaMinutes: 3,
-    priceCents: 1240,
+    tier: "moto",
+    name: "Moto",
+    description: "Llega más rápido esquivando el tráfico",
+    capacity: 1,
+    etaMinutes: 2,
+    priceCents: 780,
   },
   {
-    tier: "comfort",
-    name: "Comfort",
-    description: "Newer cars with extra legroom",
+    tier: "car",
+    name: "Carro",
+    description: "Comodidad y espacio para hasta 4 personas",
     capacity: 4,
     etaMinutes: 4,
-    priceCents: 1690,
-  },
-  {
-    tier: "xl",
-    name: "XL",
-    description: "Affordable rides for groups up to 6",
-    capacity: 6,
-    etaMinutes: 6,
-    priceCents: 2310,
-  },
-  {
-    tier: "premium",
-    name: "Black",
-    description: "Premium cars with top-rated drivers",
-    capacity: 4,
-    etaMinutes: 8,
-    priceCents: 3420,
+    priceCents: 1490,
   },
 ];
 
@@ -163,9 +173,13 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
   },
 ];
 
-export function pickRandomDriver(): Driver {
-  const i = Math.floor(Math.random() * DRIVERS.length);
-  return DRIVERS[i]!;
+export function pickRandomDriver(vehicleType?: Driver["vehicleType"]): Driver {
+  const pool = vehicleType
+    ? DRIVERS.filter((d) => d.vehicleType === vehicleType)
+    : DRIVERS;
+  const list = pool.length > 0 ? pool : DRIVERS;
+  const i = Math.floor(Math.random() * list.length);
+  return list[i]!;
 }
 
 export function formatPrice(cents: number): string {

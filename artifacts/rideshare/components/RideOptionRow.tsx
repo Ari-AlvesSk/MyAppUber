@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -12,11 +12,12 @@ type Props = {
   onPress: () => void;
 };
 
-const ICONS: Record<RideOption["tier"], keyof typeof Feather.glyphMap> = {
-  economy: "navigation",
-  comfort: "wind",
-  xl: "users",
-  premium: "award",
+const ICONS: Record<
+  RideOption["tier"],
+  keyof typeof MaterialCommunityIcons.glyphMap
+> = {
+  moto: "motorbike",
+  car: "car-side",
 };
 
 export function RideOptionRow({ option, selected, onPress }: Props) {
@@ -43,9 +44,9 @@ export function RideOptionRow({ option, selected, onPress }: Props) {
           },
         ]}
       >
-        <Feather
+        <MaterialCommunityIcons
           name={iconName}
-          size={22}
+          size={26}
           color={selected ? colors.accentForeground : colors.foreground}
         />
       </View>

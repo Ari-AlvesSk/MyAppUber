@@ -50,7 +50,7 @@ export default function RideScreen() {
       timeouts.push(
         setTimeout(() => {
           if (cancelled) return;
-          const driver = pickRandomDriver();
+          const driver = pickRandomDriver(ride.tier);
           updateRide(ride.id, { status: "arriving", driver });
           if (Platform.OS !== "web") {
             Haptics.notificationAsync(

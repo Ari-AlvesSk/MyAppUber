@@ -1,4 +1,4 @@
-export type RideTier = "economy" | "comfort" | "xl" | "premium";
+export type RideTier = "moto" | "car";
 
 export type RideStatus =
   | "searching"
@@ -29,6 +29,7 @@ export type Driver = {
   name: string;
   rating: number;
   trips: number;
+  vehicleType: RideTier;
   car: string;
   plate: string;
   color: string;
