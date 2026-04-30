@@ -24,6 +24,9 @@ import {
   RIDE_OPTIONS,
   SAVED_PLACES,
   SUGGESTED_PLACES,
+  computePriceCents,
+  estimateDistanceKm,
+  formatDistanceKm,
   formatPrice,
 } from "@/data/mock";
 import { useColors } from "@/hooks/useColors";
@@ -79,6 +82,18 @@ export default function BookingScreen() {
     [selectedTier],
   );
 
+  const distanceKm = useMemo(
+    () => (destination ? estimateDistanceKm(destination.id) : 0),
+    [destination],
+  );
+
+  const tripDurationMin = Math.max(3, Math.round(distanceKm * 2.4));
+
+  const selectedPriceCents = useMemo(
+    () => computePriceCents(distanceKm, selectedOption.pricePerKmCents),
+    [distanceKm, selectedOption.pricePerKmCents],
+  );
+
   const defaultPayment = payments.find((p) => p.id === defaultPaymentId);
 
   const handleSelectDestination = (p: Place) => {
@@ -94,12 +109,6 @@ export default function BookingScreen() {
     setRequesting(true);
 
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 6);
-    // Compute deterministic-ish distance from price
-    const distanceKm = Math.max(
-      2,
-      Math.min(28, selectedOption.priceCents / 130),
-    );
-    const durationMinutes = Math.round(distanceKm * 2.4);
 
     const ride: Ride = {
       id,
@@ -107,9 +116,9 @@ export default function BookingScreen() {
       dropoff: destination,
       tier: selectedOption.tier,
       tierName: selectedOption.name,
-      priceCents: selectedOption.priceCents,
+      priceCents: selectedPriceCents,
       distanceKm,
-      durationMinutes,
+      durationMinutes: tripDurationMin,
       status: "searching",
       driver: null,
       createdAt: Date.now(),
@@ -292,7 +301,7 @@ export default function BookingScreen() {
                       { color: colors.foreground },
                     ]}
                   >
-                    {Math.round(selectedOption.priceCents / 130 * 2.4)} min
+                    {tripDurationMin} min
                   </Text>
                 </View>
                 <View
@@ -309,7 +318,7 @@ export default function BookingScreen() {
                       { color: colors.foreground },
                     ]}
                   >
-                    {(selectedOption.priceCents / 130).toFixed(1)} km
+                    {formatDistanceKm(distanceKm)}
                   </Text>
                 </View>
               </View>
@@ -327,6 +336,7 @@ export default function BookingScreen() {
                   <RideOptionRow
                     key={o.tier}
                     option={o}
+                    distanceKm={distanceKm}
                     selected={o.tier === selectedTier}
                     onPress={() => {
                       if (Platform.OS !== "web") {
@@ -379,7 +389,7 @@ export default function BookingScreen() {
             />
           </Pressable>
           <PrimaryButton
-            label={`Confirm ${selectedOption.name} · ${formatPrice(selectedOption.priceCents)}`}
+            label={`Confirm ${selectedOption.name} · ${formatPrice(selectedPriceCents)}`}
             variant="accent"
             onPress={handleConfirm}
             loading={requesting}

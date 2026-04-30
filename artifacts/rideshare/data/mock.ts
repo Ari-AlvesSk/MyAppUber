@@ -130,22 +130,24 @@ export const DRIVERS: Driver[] = [
   },
 ];
 
+export const PRICE_PER_KM_CENTS = 800;
+
 export const RIDE_OPTIONS: RideOption[] = [
   {
     tier: "moto",
     name: "Moto",
-    description: "Llega más rápido esquivando el tráfico",
+    description: "Chega mais rápido desviando do trânsito",
     capacity: 1,
     etaMinutes: 2,
-    priceCents: 780,
+    pricePerKmCents: PRICE_PER_KM_CENTS,
   },
   {
     tier: "car",
     name: "Carro",
-    description: "Comodidad y espacio para hasta 4 personas",
+    description: "Conforto e espaço para até 4 pessoas",
     capacity: 4,
     etaMinutes: 4,
-    priceCents: 1490,
+    pricePerKmCents: PRICE_PER_KM_CENTS,
   },
 ];
 
@@ -183,5 +185,42 @@ export function pickRandomDriver(vehicleType?: Driver["vehicleType"]): Driver {
 }
 
 export function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+  const reais = (cents / 100).toFixed(2).replace(".", ",");
+  return `R$ ${reais}`;
+}
+
+export function formatDistanceKm(km: number): string {
+  return `${km.toFixed(1).replace(".", ",")} km`;
+}
+
+const PLACE_DISTANCE_OVERRIDES: Record<string, number> = {
+  current: 0,
+  home: 4.2,
+  work: 6.0,
+  r1: 3.8,
+  r2: 21.4,
+  r3: 2.6,
+  r4: 1.9,
+  r5: 5.7,
+  s1: 4.5,
+  s2: 7.3,
+  s3: 6.1,
+};
+
+export function estimateDistanceKm(placeId: string): number {
+  const override = PLACE_DISTANCE_OVERRIDES[placeId];
+  if (override !== undefined) return override;
+  let hash = 0;
+  for (let i = 0; i < placeId.length; i++) {
+    hash = (hash * 31 + placeId.charCodeAt(i)) | 0;
+  }
+  const positive = Math.abs(hash);
+  return 2 + (positive % 240) / 10;
+}
+
+export function computePriceCents(
+  distanceKm: number,
+  pricePerKmCents: number,
+): number {
+  return Math.max(500, Math.round(distanceKm * pricePerKmCents));
 }

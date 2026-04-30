@@ -21,7 +21,7 @@ export type RideOption = {
   description: string;
   capacity: number;
   etaMinutes: number;
-  priceCents: number;
+  pricePerKmCents: number;
 };
 
 export type Driver = {

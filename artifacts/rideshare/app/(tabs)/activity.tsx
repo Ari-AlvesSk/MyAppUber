@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useRides } from "@/context/RideContext";
-import { formatPrice } from "@/data/mock";
+import { formatDistanceKm, formatPrice } from "@/data/mock";
 import { useColors } from "@/hooks/useColors";
 import type { Ride } from "@/types";
 
@@ -294,7 +294,7 @@ export default function ActivityScreen() {
                         { color: colors.mutedForeground },
                       ]}
                     >
-                      {r.distanceKm.toFixed(1)} km
+                      {formatDistanceKm(r.distanceKm)}
                     </Text>
                   </View>
                   <Text

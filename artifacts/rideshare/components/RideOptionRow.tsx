@@ -3,11 +3,12 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
-import { formatPrice } from "@/data/mock";
+import { computePriceCents, formatPrice } from "@/data/mock";
 import type { RideOption } from "@/types";
 
 type Props = {
   option: RideOption;
+  distanceKm: number;
   selected: boolean;
   onPress: () => void;
 };
@@ -20,9 +21,15 @@ const ICONS: Record<
   car: "car-side",
 };
 
-export function RideOptionRow({ option, selected, onPress }: Props) {
+export function RideOptionRow({
+  option,
+  distanceKm,
+  selected,
+  onPress,
+}: Props) {
   const colors = useColors();
   const iconName = ICONS[option.tier];
+  const priceCents = computePriceCents(distanceKm, option.pricePerKmCents);
 
   return (
     <Pressable
@@ -63,11 +70,11 @@ export function RideOptionRow({ option, selected, onPress }: Props) {
           </View>
         </View>
         <Text style={[styles.eta, { color: colors.mutedForeground }]}>
-          {option.etaMinutes} min away · {option.description}
+          {option.etaMinutes} min · {option.description}
         </Text>
       </View>
       <Text style={[styles.price, { color: colors.foreground }]}>
-        {formatPrice(option.priceCents)}
+        {formatPrice(priceCents)}
       </Text>
     </Pressable>
   );

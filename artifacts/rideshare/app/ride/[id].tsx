@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MapCanvas } from "@/components/MapCanvas";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useRides } from "@/context/RideContext";
-import { formatPrice, pickRandomDriver } from "@/data/mock";
+import { formatDistanceKm, formatPrice, pickRandomDriver } from "@/data/mock";
 import { useColors } from "@/hooks/useColors";
 import type { Ride } from "@/types";
 
@@ -488,7 +488,7 @@ export default function RideScreen() {
                       { color: colors.foreground },
                     ]}
                   >
-                    {ride.distanceKm.toFixed(1)} km
+                    {formatDistanceKm(ride.distanceKm)}
                   </Text>
                 </View>
                 <View style={styles.receiptRow}>
