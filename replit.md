@@ -25,3 +25,12 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## RideShare app (`artifacts/rideshare`)
+
+Expo mobile app (pt-BR). Features:
+
+- **Auth**: `context/AuthContext.tsx` (AsyncStorage `rideshare:auth:v1`). Roles: `passenger` | `driver`. Login/register/logout/switchRole.
+- **Auth gate**: `app/_layout.tsx` `<AuthGate>` redirects to `/login` when signed out, `/(driver)` when role=driver, `/(tabs)` when role=passenger.
+- **Routes**: `login`, `register`, `(tabs)` (passenger area), `(driver)` (driver area: `index` online toggle + ride request, `earnings`, `account`), `booking`, `ride/[id]`.
+- **Pricing**: `computePriceCents(distanceKm, perKm, min)` from `data/mock.ts`. Tiers: moto (R$5 min, R$5/km), car (R$8 min, R$10/km).
