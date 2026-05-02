@@ -32,12 +32,16 @@ import {
 import { useColors } from "@/hooks/useColors";
 import type { Place, Ride } from "@/types";
 
-const ALL_PLACES: Place[] = [...SAVED_PLACES, ...RECENT_PLACES, ...SUGGESTED_PLACES];
+const ALL_PLACES: Place[] = [
+  ...SAVED_PLACES,
+  ...RECENT_PLACES,
+  ...SUGGESTED_PLACES,
+];
 
 const PICKUP_DEFAULT: Place = {
   id: "current",
-  label: "Current location",
-  address: "Mission District, San Francisco",
+  label: "Localização atual",
+  address: "Consolação, São Paulo",
 };
 
 function findPlace(id?: string): Place | null {
@@ -66,9 +70,7 @@ export default function BookingScreen() {
   }, [params.destinationId]);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) {
-      return [...SAVED_PLACES, ...RECENT_PLACES];
-    }
+    if (!query.trim()) return [...SAVED_PLACES, ...RECENT_PLACES];
     const q = query.toLowerCase();
     return ALL_PLACES.filter(
       (p) =>
@@ -113,7 +115,8 @@ export default function BookingScreen() {
     if (!destination) return;
     setRequesting(true);
 
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 6);
+    const id =
+      Date.now().toString() + Math.random().toString(36).substr(2, 6);
 
     const ride: Ride = {
       id,
@@ -134,7 +137,8 @@ export default function BookingScreen() {
     router.replace(`/ride/${id}`);
   };
 
-  const topInset = Platform.OS === "web" ? Math.max(insets.top, 24) : insets.top;
+  const topInset =
+    Platform.OS === "web" ? Math.max(insets.top, 24) : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
   return (
@@ -142,7 +146,6 @@ export default function BookingScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.root, { backgroundColor: colors.background }]}
     >
-      {/* Header */}
       <View
         style={[
           styles.header,
@@ -162,7 +165,7 @@ export default function BookingScreen() {
           <Feather name="x" size={20} color={colors.foreground} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          Plan your ride
+          Planejar corrida
         </Text>
         <View style={{ width: 40 }} />
       </View>
@@ -173,7 +176,7 @@ export default function BookingScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Route inputs */}
+        {/* Campos de rota */}
         <View
           style={[
             styles.routeBox,
@@ -181,20 +184,12 @@ export default function BookingScreen() {
           ]}
         >
           <View style={styles.routeIconCol}>
-            <View
-              style={[
-                styles.dot,
-                { backgroundColor: colors.accent },
-              ]}
-            />
+            <View style={[styles.dot, { backgroundColor: colors.accent }]} />
             <View
               style={[styles.routeLine, { backgroundColor: colors.border }]}
             />
             <View
-              style={[
-                styles.square,
-                { backgroundColor: colors.foreground },
-              ]}
+              style={[styles.square, { backgroundColor: colors.foreground }]}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -210,29 +205,20 @@ export default function BookingScreen() {
               </Text>
             </View>
             <View
-              style={[
-                styles.divider,
-                { backgroundColor: colors.border },
-              ]}
+              style={[styles.divider, { backgroundColor: colors.border }]}
             />
             <View style={styles.routeRow}>
               <TextInput
                 value={query !== "" ? query : destination?.label ?? ""}
                 onChangeText={(t) => {
                   setQuery(t);
-                  if (t === "") return;
                 }}
                 onFocus={() => {
-                  if (destination && query === "") {
-                    setQuery("");
-                  }
+                  if (destination && query === "") setQuery("");
                 }}
-                placeholder="Where to?"
+                placeholder="Para onde?"
                 placeholderTextColor={colors.mutedForeground}
-                style={[
-                  styles.input,
-                  { color: colors.foreground },
-                ]}
+                style={[styles.input, { color: colors.foreground }]}
                 returnKeyType="search"
               />
               {destination ? (
@@ -250,11 +236,10 @@ export default function BookingScreen() {
           </View>
         </View>
 
-        {/* Suggestions / Mini map + ride options */}
         {!destination || query.length > 0 ? (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              {query ? "Results" : "Saved & Recent"}
+              {query ? "Resultados" : "Salvos e Recentes"}
             </Text>
             {filtered.length === 0 ? (
               <View style={styles.empty}>
@@ -264,12 +249,9 @@ export default function BookingScreen() {
                   color={colors.mutedForeground}
                 />
                 <Text
-                  style={[
-                    styles.emptyTxt,
-                    { color: colors.mutedForeground },
-                  ]}
+                  style={[styles.emptyTxt, { color: colors.mutedForeground }]}
                 >
-                  No matches for "{query}"
+                  Nenhum resultado para "{query}"
                 </Text>
               </View>
             ) : (
@@ -284,12 +266,8 @@ export default function BookingScreen() {
           </View>
         ) : (
           <>
-            {/* Map preview */}
             <View
-              style={[
-                styles.mapBox,
-                { borderColor: colors.border },
-              ]}
+              style={[styles.mapBox, { borderColor: colors.border }]}
             >
               <MapCanvas height={200} showRoute />
               <View
@@ -329,12 +307,11 @@ export default function BookingScreen() {
               </View>
             </View>
 
-            {/* Ride options */}
             <View style={styles.section}>
               <Text
                 style={[styles.sectionTitle, { color: colors.foreground }]}
               >
-                Choose a ride
+                Escolha o tipo
               </Text>
               <View style={styles.options}>
                 {RIDE_OPTIONS.map((o) => (
@@ -357,7 +334,6 @@ export default function BookingScreen() {
         )}
       </ScrollView>
 
-      {/* Bottom action */}
       {destination && query === "" && (
         <View
           style={[
@@ -372,19 +348,12 @@ export default function BookingScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.payRow,
-              {
-                backgroundColor: colors.muted,
-                opacity: pressed ? 0.7 : 1,
-              },
+              { backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1 },
             ]}
           >
-            <Feather
-              name="credit-card"
-              size={16}
-              color={colors.foreground}
-            />
+            <Feather name="credit-card" size={16} color={colors.foreground} />
             <Text style={[styles.payTxt, { color: colors.foreground }]}>
-              {defaultPayment ? defaultPayment.label : "Cash"} ·{" "}
+              {defaultPayment ? defaultPayment.label : "Dinheiro"} ·{" "}
               {defaultPayment?.detail ?? ""}
             </Text>
             <Feather
@@ -394,7 +363,7 @@ export default function BookingScreen() {
             />
           </Pressable>
           <PrimaryButton
-            label={`Confirm ${selectedOption.name} · ${formatPrice(selectedPriceCents)}`}
+            label={`Confirmar ${selectedOption.name} · ${formatPrice(selectedPriceCents)}`}
             variant="accent"
             onPress={handleConfirm}
             loading={requesting}
@@ -406,9 +375,7 @@ export default function BookingScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+  root: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -424,13 +391,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-  },
-  scroll: {
-    flex: 1,
-  },
+  headerTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  scroll: { flex: 1 },
   routeBox: {
     margin: 20,
     flexDirection: "row",
@@ -439,52 +401,16 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
   },
-  routeIconCol: {
-    alignItems: "center",
-    paddingTop: 6,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  routeLine: {
-    width: 2,
-    flex: 1,
-    marginVertical: 6,
-    minHeight: 22,
-  },
-  square: {
-    width: 12,
-    height: 12,
-    borderRadius: 3,
-  },
-  routeRow: {
-    minHeight: 44,
-    justifyContent: "center",
-    gap: 2,
-  },
-  routeLabel: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-  },
-  routeSub: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
-  input: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    paddingVertical: 0,
-  },
-  divider: {
-    height: 1,
-    marginVertical: 6,
-  },
-  section: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-  },
+  routeIconCol: { alignItems: "center", paddingTop: 6 },
+  dot: { width: 12, height: 12, borderRadius: 6 },
+  routeLine: { width: 2, flex: 1, marginVertical: 6, minHeight: 22 },
+  square: { width: 12, height: 12, borderRadius: 3 },
+  routeRow: { minHeight: 44, justifyContent: "center", gap: 2 },
+  routeLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  routeSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  input: { fontSize: 15, fontFamily: "Inter_600SemiBold", paddingVertical: 0 },
+  divider: { height: 1, marginVertical: 6 },
+  section: { paddingHorizontal: 20, paddingBottom: 12 },
   sectionTitle: {
     fontSize: 13,
     fontFamily: "Inter_700Bold",
@@ -493,15 +419,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 4,
   },
-  empty: {
-    paddingVertical: 28,
-    alignItems: "center",
-    gap: 8,
-  },
-  emptyTxt: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-  },
+  empty: { paddingVertical: 28, alignItems: "center", gap: 8 },
+  emptyTxt: { fontSize: 13, fontFamily: "Inter_500Medium" },
   mapBox: {
     marginHorizontal: 20,
     marginBottom: 8,
@@ -521,22 +440,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
   },
-  tripStat: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  tripStatTxt: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-  },
-  tripStatDivider: {
-    width: 1,
-    height: 12,
-  },
-  options: {
-    gap: 4,
-  },
+  tripStat: { flexDirection: "row", alignItems: "center", gap: 6 },
+  tripStatTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  tripStatDivider: { width: 1, height: 12 },
+  options: { gap: 4 },
   bottomBar: {
     position: "absolute",
     bottom: 0,
@@ -555,9 +462,5 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 14,
   },
-  payTxt: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-  },
+  payTxt: { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });

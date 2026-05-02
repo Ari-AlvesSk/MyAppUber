@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MapCanvas } from "@/components/MapCanvas";
 import { PlaceRow } from "@/components/PlaceRow";
+import { useAuth } from "@/context/AuthContext";
 import { useRides } from "@/context/RideContext";
 import { RECENT_PLACES, SAVED_PLACES, SUGGESTED_PLACES } from "@/data/mock";
 import { useColors } from "@/hooks/useColors";
@@ -21,7 +22,8 @@ export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { activeRide, profile, rides } = useRides();
+  const { activeRide } = useRides();
+  const { user } = useAuth();
 
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 67) : insets.top;
@@ -29,15 +31,16 @@ export default function HomeScreen() {
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
-    if (h < 5) return "Late night";
-    if (h < 12) return "Good morning";
-    if (h < 18) return "Good afternoon";
-    return "Good evening";
+    if (h < 5) return "Boa madrugada";
+    if (h < 12) return "Bom dia";
+    if (h < 18) return "Boa tarde";
+    return "Boa noite";
   }, []);
 
-  const firstName = profile.name.split(" ")[0];
-
-  const completedCount = rides.filter((r) => r.status === "completed").length;
+  const firstName = (user?.name ?? "Passageiro").split(" ")[0];
+  const completedCount = useRides().rides.filter(
+    (r) => r.status === "completed",
+  ).length;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -48,7 +51,7 @@ export default function HomeScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Cabeçalho */}
         <View style={styles.header}>
           <View>
             <Text style={[styles.greet, { color: colors.mutedForeground }]}>
@@ -59,22 +62,15 @@ export default function HomeScreen() {
             </Text>
           </View>
           <View
-            style={[
-              styles.avatar,
-              {
-                backgroundColor: colors.foreground,
-              },
-            ]}
+            style={[styles.avatar, { backgroundColor: colors.foreground }]}
           >
-            <Text
-              style={[styles.avatarTxt, { color: colors.background }]}
-            >
+            <Text style={[styles.avatarTxt, { color: colors.background }]}>
               {firstName.charAt(0)}
             </Text>
           </View>
         </View>
 
-        {/* Map preview */}
+        {/* Mapa */}
         <View
           style={[
             styles.mapWrap,
@@ -83,20 +79,19 @@ export default function HomeScreen() {
         >
           <MapCanvas height={220} showRoute />
           <View
-            style={[
-              styles.mapOverlay,
-              { backgroundColor: colors.background },
-            ]}
+            style={[styles.mapOverlay, { backgroundColor: colors.background }]}
             pointerEvents="none"
           >
             <Feather name="map-pin" size={14} color={colors.accent} />
-            <Text style={[styles.mapOverlayTxt, { color: colors.foreground }]}>
-              San Francisco, CA
+            <Text
+              style={[styles.mapOverlayTxt, { color: colors.foreground }]}
+            >
+              São Paulo, SP
             </Text>
           </View>
         </View>
 
-        {/* Where to */}
+        {/* Buscar destino */}
         <Pressable
           onPress={() => router.push("/booking")}
           style={({ pressed }) => [
@@ -108,30 +103,24 @@ export default function HomeScreen() {
           ]}
         >
           <View
-            style={[
-              styles.searchIcon,
-              { backgroundColor: colors.accent },
-            ]}
+            style={[styles.searchIcon, { backgroundColor: colors.accent }]}
           >
             <Feather name="search" size={16} color={colors.accentForeground} />
           </View>
           <Text style={[styles.searchTxt, { color: colors.background }]}>
-            Where to?
+            Para onde?
           </Text>
           <View
-            style={[
-              styles.nowChip,
-              { backgroundColor: colors.background },
-            ]}
+            style={[styles.nowChip, { backgroundColor: colors.background }]}
           >
             <Feather name="clock" size={12} color={colors.foreground} />
             <Text style={[styles.nowTxt, { color: colors.foreground }]}>
-              Now
+              Agora
             </Text>
           </View>
         </Pressable>
 
-        {/* Active ride banner */}
+        {/* Corrida ativa */}
         {activeRide && (
           <Pressable
             onPress={() => router.push(`/ride/${activeRide.id}`)}
@@ -157,7 +146,7 @@ export default function HomeScreen() {
                     { color: colors.accentForeground },
                   ]}
                 >
-                  Ride in progress
+                  Corrida em andamento
                 </Text>
                 <Text
                   style={[
@@ -166,7 +155,7 @@ export default function HomeScreen() {
                   ]}
                   numberOfLines={1}
                 >
-                  To {activeRide.dropoff.label}
+                  Para {activeRide.dropoff.label}
                 </Text>
               </View>
             </View>
@@ -178,16 +167,12 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
-        {/* Saved places */}
+        {/* Locais salvos */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            Saved places
+            Locais salvos
           </Text>
-          <View
-            style={[
-              styles.savedGrid,
-            ]}
-          >
+          <View style={styles.savedGrid}>
             {SAVED_PLACES.map((p) => (
               <Pressable
                 key={p.id}
@@ -233,17 +218,17 @@ export default function HomeScreen() {
                   ]}
                   numberOfLines={1}
                 >
-                  {p.address.split(",")[0]}
+                  {p.address.split("–")[0]?.trim()}
                 </Text>
               </Pressable>
             ))}
           </View>
         </View>
 
-        {/* Recent */}
+        {/* Recentes */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            Recent
+            Recentes
           </Text>
           {RECENT_PLACES.slice(0, 4).map((p) => (
             <PlaceRow
@@ -260,10 +245,10 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* Suggested */}
+        {/* Sugestões */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            Around you
+            Perto de você
           </Text>
           <ScrollView
             horizontal
@@ -301,10 +286,7 @@ export default function HomeScreen() {
                   />
                 </View>
                 <Text
-                  style={[
-                    styles.suggestLabel,
-                    { color: colors.foreground },
-                  ]}
+                  style={[styles.suggestLabel, { color: colors.foreground }]}
                 >
                   {p.label}
                 </Text>
@@ -322,7 +304,7 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
-        {/* Stats */}
+        {/* Estatísticas */}
         <View
           style={[
             styles.statCard,
@@ -336,7 +318,7 @@ export default function HomeScreen() {
             <Text
               style={[styles.statLabel, { color: colors.mutedForeground }]}
             >
-              Trips taken
+              Corridas
             </Text>
           </View>
           <View
@@ -344,12 +326,12 @@ export default function HomeScreen() {
           />
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: colors.foreground }]}>
-              4.96
+              4,96
             </Text>
             <Text
               style={[styles.statLabel, { color: colors.mutedForeground }]}
             >
-              Rider rating
+              Avaliação
             </Text>
           </View>
           <View
@@ -357,12 +339,12 @@ export default function HomeScreen() {
           />
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: colors.accent }]}>
-              Gold
+              Ouro
             </Text>
             <Text
               style={[styles.statLabel, { color: colors.mutedForeground }]}
             >
-              Member tier
+              Nível
             </Text>
           </View>
         </View>
@@ -372,9 +354,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+  root: { flex: 1 },
   header: {
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -383,10 +363,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  greet: {
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
-  },
+  greet: { fontSize: 14, fontFamily: "Inter_500Medium" },
   name: {
     fontSize: 28,
     fontFamily: "Inter_700Bold",
@@ -399,10 +376,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarTxt: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-  },
+  avatarTxt: { fontSize: 16, fontFamily: "Inter_700Bold" },
   mapWrap: {
     marginHorizontal: 20,
     borderRadius: 22,
@@ -421,10 +395,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
   },
-  mapOverlayTxt: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-  },
+  mapOverlayTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   searchBar: {
     marginHorizontal: 20,
     marginTop: 16,
@@ -442,11 +413,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  searchTxt: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-  },
+  searchTxt: { flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold" },
   nowChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -455,10 +422,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
   },
-  nowTxt: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-  },
+  nowTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   activeBanner: {
     marginHorizontal: 20,
     marginTop: 14,
@@ -474,24 +438,10 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  activeTitle: {
-    fontSize: 14,
-    fontFamily: "Inter_700Bold",
-  },
-  activeSub: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    marginTop: 2,
-  },
-  section: {
-    marginTop: 28,
-    paddingHorizontal: 20,
-  },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  activeTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  activeSub: { fontSize: 13, fontFamily: "Inter_500Medium", marginTop: 2 },
+  section: { marginTop: 28, paddingHorizontal: 20 },
   sectionTitle: {
     fontSize: 13,
     fontFamily: "Inter_700Bold",
@@ -499,10 +449,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     marginBottom: 10,
   },
-  savedGrid: {
-    flexDirection: "row",
-    gap: 12,
-  },
+  savedGrid: { flexDirection: "row", gap: 12 },
   savedCard: {
     flex: 1,
     padding: 16,
@@ -517,18 +464,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  savedLabel: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-  },
-  savedAddr: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
-  hScroll: {
-    gap: 12,
-    paddingRight: 20,
-  },
+  savedLabel: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  savedAddr: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  hScroll: { gap: 12, paddingRight: 20 },
   suggestCard: {
     width: 180,
     padding: 14,
@@ -543,15 +481,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  suggestLabel: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
-  suggestAddr: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    minHeight: 32,
-  },
+  suggestLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  suggestAddr: { fontSize: 12, fontFamily: "Inter_400Regular", minHeight: 32 },
   statCard: {
     marginTop: 28,
     marginHorizontal: 20,
@@ -561,23 +492,13 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
   },
-  statItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-  },
-  statValue: {
-    fontSize: 22,
-    fontFamily: "Inter_700Bold",
-  },
+  statItem: { flex: 1, alignItems: "center", gap: 4 },
+  statValue: { fontSize: 22, fontFamily: "Inter_700Bold" },
   statLabel: {
     fontSize: 11,
     fontFamily: "Inter_500Medium",
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
-  divider: {
-    width: 1,
-    height: 36,
-  },
+  divider: { width: 1, height: 36 },
 });

@@ -84,7 +84,11 @@ export default function RegisterScreen() {
             }
           : {}),
       });
-      router.replace(u.role === "driver" ? "/(driver)" : "/(tabs)");
+      if (u.role === "driver") {
+        router.replace("/(driver)/pending");
+      } else {
+        router.replace("/(tabs)");
+      }
     } finally {
       setSubmitting(false);
     }

@@ -40,7 +40,6 @@ export default function RideScreen() {
   const [etaSeconds, setEtaSeconds] = useState<number>(180);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
 
-  // Drive the ride state machine forward
   useEffect(() => {
     if (!ride) return;
     let cancelled = false;
@@ -94,7 +93,6 @@ export default function RideScreen() {
     };
   }, [ride?.id, ride?.status, updateRide]);
 
-  // ETA countdown for arriving / in_progress
   useEffect(() => {
     if (!ride) return;
     if (ride.status !== "arriving" && ride.status !== "in_progress") return;
@@ -105,7 +103,6 @@ export default function RideScreen() {
     return () => clearInterval(t);
   }, [ride?.id, ride?.status, ride?.durationMinutes]);
 
-  // Pulse animation for searching
   useEffect(() => {
     if (ride?.status !== "searching") return;
     const loop = Animated.loop(
@@ -133,18 +130,19 @@ export default function RideScreen() {
         <View
           style={[
             styles.center,
-            {
-              paddingTop: insets.top + 40,
-              paddingBottom: insets.bottom,
-            },
+            { paddingTop: insets.top + 40, paddingBottom: insets.bottom },
           ]}
         >
-          <Feather name="alert-circle" size={28} color={colors.mutedForeground} />
+          <Feather
+            name="alert-circle"
+            size={28}
+            color={colors.mutedForeground}
+          />
           <Text style={[styles.notFound, { color: colors.foreground }]}>
-            Ride not found
+            Corrida não encontrada
           </Text>
           <PrimaryButton
-            label="Back to home"
+            label="Voltar ao início"
             onPress={() => router.replace("/(tabs)")}
           />
         </View>
@@ -170,17 +168,13 @@ export default function RideScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Map */}
-      <View
-        style={[
-          styles.mapWrap,
-          { paddingTop: insets.top },
-        ]}
-      >
+      <View style={[styles.mapWrap, { paddingTop: insets.top }]}>
         <MapCanvas
           height={420}
           showRoute={ride.status !== "completed"}
-          showCar={ride.status === "arriving" || ride.status === "in_progress"}
+          showCar={
+            ride.status === "arriving" || ride.status === "in_progress"
+          }
         />
         <Pressable
           onPress={() => router.replace("/(tabs)")}
@@ -197,7 +191,6 @@ export default function RideScreen() {
         </Pressable>
       </View>
 
-      {/* Bottom card */}
       <View
         style={[
           styles.sheet,
@@ -208,9 +201,7 @@ export default function RideScreen() {
           },
         ]}
       >
-        <View
-          style={[styles.handle, { backgroundColor: colors.border }]}
-        />
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -253,12 +244,12 @@ export default function RideScreen() {
                 </View>
               </View>
               <Text style={[styles.title, { color: colors.foreground }]}>
-                Finding your driver
+                Encontrando seu motorista
               </Text>
               <Text
                 style={[styles.subtitle, { color: colors.mutedForeground }]}
               >
-                Connecting you with the best nearby driver…
+                Conectando você ao melhor motorista próximo…
               </Text>
             </View>
           )}
@@ -288,8 +279,8 @@ export default function RideScreen() {
                       ]}
                     >
                       {ride.status === "arriving"
-                        ? "Driver on the way"
-                        : "On trip"}
+                        ? "Motorista a caminho"
+                        : "Em viagem"}
                     </Text>
                   </View>
                   <Text style={[styles.eta, { color: colors.foreground }]}>
@@ -343,7 +334,7 @@ export default function RideScreen() {
                         ]}
                       >
                         {ride.driver.rating.toFixed(2)} ·{" "}
-                        {ride.driver.trips.toLocaleString()} trips
+                        {ride.driver.trips.toLocaleString("pt-BR")} corridas
                       </Text>
                     </View>
                   </View>
@@ -382,10 +373,7 @@ export default function RideScreen() {
                 </View>
 
                 <View
-                  style={[
-                    styles.carCard,
-                    { borderColor: colors.border },
-                  ]}
+                  style={[styles.carCard, { borderColor: colors.border }]}
                 >
                   <View>
                     <Text
@@ -405,16 +393,11 @@ export default function RideScreen() {
                   <View
                     style={[
                       styles.plate,
-                      {
-                        backgroundColor: colors.foreground,
-                      },
+                      { backgroundColor: colors.foreground },
                     ]}
                   >
                     <Text
-                      style={[
-                        styles.plateTxt,
-                        { color: colors.background },
-                      ]}
+                      style={[styles.plateTxt, { color: colors.background }]}
                     >
                       {ride.driver.plate}
                     </Text>
@@ -438,12 +421,12 @@ export default function RideScreen() {
                 />
               </View>
               <Text style={[styles.title, { color: colors.foreground }]}>
-                You've arrived
+                Você chegou!
               </Text>
               <Text
                 style={[styles.subtitle, { color: colors.mutedForeground }]}
               >
-                Hope you enjoyed the ride. Your receipt has been sent.
+                Esperamos que tenha gostado da corrida. O recibo foi enviado.
               </Text>
 
               <View
@@ -462,7 +445,7 @@ export default function RideScreen() {
                       { color: colors.mutedForeground },
                     ]}
                   >
-                    Fare
+                    Tarifa
                   </Text>
                   <Text
                     style={[
@@ -480,7 +463,7 @@ export default function RideScreen() {
                       { color: colors.mutedForeground },
                     ]}
                   >
-                    Distance
+                    Distância
                   </Text>
                   <Text
                     style={[
@@ -498,7 +481,7 @@ export default function RideScreen() {
                       { color: colors.mutedForeground },
                     ]}
                   >
-                    Duration
+                    Duração
                   </Text>
                   <Text
                     style={[
@@ -511,10 +494,8 @@ export default function RideScreen() {
                 </View>
               </View>
 
-              <Text
-                style={[styles.rateLabel, { color: colors.foreground }]}
-              >
-                Rate your trip
+              <Text style={[styles.rateLabel, { color: colors.foreground }]}>
+                Avalie sua corrida
               </Text>
               <View style={styles.stars}>
                 {[1, 2, 3, 4, 5].map((n) => (
@@ -548,17 +529,17 @@ export default function RideScreen() {
                 <Feather name="x" size={28} color={colors.destructive} />
               </View>
               <Text style={[styles.title, { color: colors.foreground }]}>
-                Trip cancelled
+                Corrida cancelada
               </Text>
               <Text
                 style={[styles.subtitle, { color: colors.mutedForeground }]}
               >
-                No charges were applied.
+                Nenhuma cobrança foi realizada.
               </Text>
             </View>
           )}
 
-          {/* Route summary */}
+          {/* Resumo da rota */}
           <View
             style={[
               styles.routeSummary,
@@ -569,14 +550,9 @@ export default function RideScreen() {
             ]}
           >
             <View style={styles.routeIconCol}>
+              <View style={[styles.dot, { backgroundColor: colors.accent }]} />
               <View
-                style={[styles.dot, { backgroundColor: colors.accent }]}
-              />
-              <View
-                style={[
-                  styles.routeLine,
-                  { backgroundColor: colors.border },
-                ]}
+                style={[styles.routeLine, { backgroundColor: colors.border }]}
               />
               <View
                 style={[
@@ -615,27 +591,30 @@ export default function RideScreen() {
           </View>
         </ScrollView>
 
-        {/* Action button */}
         <View style={styles.actions}>
           {(ride.status === "searching" ||
             ride.status === "arriving" ||
             ride.status === "matched") && (
             <PrimaryButton
-              label={confirmingCancel ? "Tap again to confirm" : "Cancel ride"}
+              label={
+                confirmingCancel
+                  ? "Toque novamente para confirmar"
+                  : "Cancelar corrida"
+              }
               variant={confirmingCancel ? "destructive" : "secondary"}
               onPress={handleCancel}
             />
           )}
           {ride.status === "in_progress" && (
             <PrimaryButton
-              label="Share trip status"
+              label="Compartilhar status da viagem"
               variant="secondary"
               onPress={() => {}}
             />
           )}
           {(ride.status === "completed" || ride.status === "cancelled") && (
             <PrimaryButton
-              label="Done"
+              label="Concluir"
               variant="primary"
               onPress={() => router.replace("/(tabs)")}
             />
@@ -647,9 +626,7 @@ export default function RideScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+  root: { flex: 1 },
   center: {
     flex: 1,
     alignItems: "center",
@@ -657,13 +634,8 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 32,
   },
-  notFound: {
-    fontSize: 17,
-    fontFamily: "Inter_700Bold",
-  },
-  mapWrap: {
-    position: "relative",
-  },
+  notFound: { fontSize: 17, fontFamily: "Inter_700Bold" },
+  mapWrap: { position: "relative" },
   backBtn: {
     position: "absolute",
     left: 16,
@@ -694,11 +666,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginBottom: 12,
   },
-  searchBlock: {
-    alignItems: "center",
-    paddingVertical: 24,
-    gap: 10,
-  },
+  searchBlock: { alignItems: "center", paddingVertical: 24, gap: 10 },
   pulseWrap: {
     width: 88,
     height: 88,
@@ -713,28 +681,20 @@ const styles = StyleSheet.create({
     borderRadius: 30,
   },
   pulseCore: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
   },
-  title: {
-    fontSize: 22,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.4,
-    textAlign: "center",
-  },
+  title: { fontSize: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
   subtitle: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Inter_500Medium",
     textAlign: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
   },
-  driverBlock: {
-    paddingTop: 8,
-    gap: 14,
-  },
+  driverBlock: { gap: 14, paddingVertical: 16 },
   statusRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -743,27 +703,14 @@ const styles = StyleSheet.create({
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 7,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 999,
   },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusTxt: {
-    fontSize: 12,
-    fontFamily: "Inter_700Bold",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  eta: {
-    fontSize: 22,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.5,
-  },
+  statusDot: { width: 7, height: 7, borderRadius: 3.5 },
+  statusTxt: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  eta: { fontSize: 22, fontFamily: "Inter_700Bold" },
   driverCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -773,34 +720,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   driverAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
   },
-  driverInitial: {
-    fontSize: 18,
-    fontFamily: "Inter_700Bold",
-  },
-  driverName: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-  },
-  driverMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 2,
-  },
-  driverMetaTxt: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-  },
-  driverBtns: {
-    flexDirection: "row",
-    gap: 6,
-  },
+  driverInitial: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  driverName: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  driverMeta: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 },
+  driverMetaTxt: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  driverBtns: { flexDirection: "row", gap: 8 },
   driverBtn: {
     width: 38,
     height: 38,
@@ -812,120 +742,64 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 14,
     borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
   },
-  carLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  carName: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    marginTop: 2,
-  },
+  carLabel: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  carName: { fontSize: 16, fontFamily: "Inter_700Bold", marginTop: 2 },
   plate: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
   },
-  plateTxt: {
-    fontSize: 14,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: 1.2,
-  },
-  completedBlock: {
-    alignItems: "center",
-    paddingVertical: 16,
-    gap: 10,
-  },
+  plateTxt: { fontSize: 14, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  completedBlock: { alignItems: "center", paddingVertical: 20, gap: 10 },
   completedIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
   },
   receiptCard: {
     width: "100%",
-    padding: 16,
     borderRadius: 18,
     borderWidth: 1,
-    gap: 10,
-    marginTop: 12,
+    overflow: "hidden",
+    marginTop: 6,
   },
   receiptRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  receiptLabel: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-  },
-  receiptValue: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-  },
+  receiptLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  receiptValue: { fontSize: 14, fontFamily: "Inter_700Bold" },
   rateLabel: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-    marginTop: 16,
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    marginTop: 12,
   },
-  stars: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 4,
-  },
-  star: {
-    padding: 4,
-  },
+  stars: { flexDirection: "row", gap: 8 },
+  star: { padding: 4 },
   routeSummary: {
-    marginTop: 18,
     flexDirection: "row",
     gap: 14,
-    padding: 14,
-    borderRadius: 16,
+    padding: 16,
+    borderRadius: 18,
     borderWidth: 1,
+    marginTop: 12,
+    marginBottom: 4,
   },
-  routeIconCol: {
-    alignItems: "center",
-    paddingTop: 6,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  routeLine: {
-    width: 2,
-    flex: 1,
-    marginVertical: 4,
-    minHeight: 20,
-  },
-  square: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-  },
-  routeLabel: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
-  routeSub: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    marginTop: 1,
-  },
-  routeGap: {
-    height: 10,
-  },
-  actions: {
-    paddingTop: 12,
-  },
+  routeIconCol: { alignItems: "center", paddingTop: 4 },
+  dot: { width: 12, height: 12, borderRadius: 6 },
+  routeLine: { width: 2, flex: 1, marginVertical: 4, minHeight: 22 },
+  square: { width: 12, height: 12, borderRadius: 3 },
+  routeLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  routeSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  routeGap: { height: 14 },
+  actions: { paddingTop: 8, gap: 8 },
 });

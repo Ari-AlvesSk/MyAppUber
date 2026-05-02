@@ -33,7 +33,8 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     setError(null);
-    if (!email.includes("@") || password.length < 4) {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed.includes("@") || password.length < 4) {
       setError("Informe um e-mail válido e uma senha com 4+ caracteres.");
       return;
     }
@@ -42,8 +43,18 @@ export default function LoginScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
     try {
-      const u = await login(role, email.trim());
-      router.replace(u.role === "driver" ? "/(driver)" : "/(tabs)");
+      const u = await login(role, trimmed);
+      if (u.role === "admin") {
+        router.replace("/admin");
+      } else if (u.role === "driver") {
+        if (u.driverStatus === "pending" || u.driverStatus === "rejected") {
+          router.replace("/(driver)/pending");
+        } else {
+          router.replace("/(driver)");
+        }
+      } else {
+        router.replace("/(tabs)");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -68,7 +79,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Brand */}
+        {/* Marca */}
         <View style={styles.brand}>
           <View
             style={[styles.brandMark, { backgroundColor: colors.foreground }]}
@@ -92,7 +103,7 @@ export default function LoginScreen() {
           Entre para continuar usando o RideShare.
         </Text>
 
-        {/* Role selector */}
+        {/* Seleção de perfil */}
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
           Entrar como
         </Text>
@@ -113,7 +124,7 @@ export default function LoginScreen() {
           />
         </View>
 
-        {/* Email */}
+        {/* E-mail */}
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
           E-mail
         </Text>
@@ -136,7 +147,7 @@ export default function LoginScreen() {
           />
         </View>
 
-        {/* Password */}
+        {/* Senha */}
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
           Senha
         </Text>
@@ -182,26 +193,7 @@ export default function LoginScreen() {
           loading={submitting}
         />
 
-        <Pressable
-          onPress={() => {
-            setEmail(
-              role === "driver"
-                ? "lucas@motorista.com"
-                : "alex@passageiro.com",
-            );
-            setPassword("demo1234");
-          }}
-          style={({ pressed }) => [
-            styles.demoBtn,
-            { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
-          ]}
-        >
-          <Feather name="zap" size={14} color={colors.foreground} />
-          <Text style={[styles.demoTxt, { color: colors.foreground }]}>
-            Preencher dados de demonstração
-          </Text>
-        </Pressable>
-
+        {/* Cadastro */}
         <View style={styles.footer}>
           <Text style={[styles.footerTxt, { color: colors.mutedForeground }]}>
             Ainda não tem uma conta?
@@ -216,6 +208,24 @@ export default function LoginScreen() {
             </Pressable>
           </Link>
         </View>
+
+        {/* Acesso admin discreto */}
+        <View style={styles.adminLinkWrap}>
+          <Pressable
+            onPress={() => {
+              setEmail("admin@rideshare.com");
+              setPassword("admin1234");
+              setRole("passenger");
+            }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+          >
+            <Text
+              style={[styles.adminLink, { color: colors.mutedForeground }]}
+            >
+              Acesso do administrador
+            </Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -229,7 +239,13 @@ type RoleCardProps = {
   onPress: () => void;
 };
 
-function RoleCard({ label, description, icon, active, onPress }: RoleCardProps) {
+function RoleCard({
+  label,
+  description,
+  icon,
+  active,
+  onPress,
+}: RoleCardProps) {
   const colors = useColors();
   return (
     <Pressable
@@ -251,9 +267,7 @@ function RoleCard({ label, description, icon, active, onPress }: RoleCardProps) 
       <View
         style={[
           styles.roleIcon,
-          {
-            backgroundColor: active ? colors.accent : colors.muted,
-          },
+          { backgroundColor: active ? colors.accent : colors.muted },
         ]}
       >
         <MaterialCommunityIcons
@@ -324,10 +338,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 16,
   },
-  roleRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
+  roleRow: { flexDirection: "row", gap: 12 },
   roleCard: {
     flex: 1,
     padding: 14,
@@ -342,14 +353,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  roleLabel: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-  },
-  roleDesc: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-  },
+  roleLabel: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  roleDesc: { fontSize: 12, fontFamily: "Inter_500Medium" },
   input: {
     flexDirection: "row",
     alignItems: "center",
@@ -365,25 +370,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     paddingVertical: 0,
   },
-  error: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    marginTop: 12,
-  },
-  demoBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginTop: 12,
-  },
-  demoTxt: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-  },
+  error: { fontSize: 13, fontFamily: "Inter_500Medium", marginTop: 12 },
   footer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -391,12 +378,15 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 28,
   },
-  footerTxt: {
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
+  footerTxt: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  footerLink: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  adminLinkWrap: {
+    alignItems: "center",
+    marginTop: 20,
+    paddingBottom: 8,
   },
-  footerLink: {
-    fontSize: 14,
-    fontFamily: "Inter_700Bold",
+  adminLink: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
   },
 });

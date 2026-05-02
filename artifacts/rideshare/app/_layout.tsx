@@ -28,30 +28,65 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
+
     const first = segments[0] as string | undefined;
     const inAuthScreens = first === "login" || first === "register";
     const inDriverArea = first === "(driver)";
     const inPassengerTabs = first === "(tabs)" || first === undefined;
+    const inAdmin = first === "admin";
+    const inPending =
+      inDriverArea && (segments[1] as string | undefined) === "pending";
 
     if (!user) {
-      if (!inAuthScreens) {
-        router.replace("/login");
-      }
+      if (!inAuthScreens) router.replace("/login");
       return;
     }
 
     if (inAuthScreens) {
-      router.replace(user.role === "driver" ? "/(driver)" : "/(tabs)");
+      if (user.role === "admin") {
+        router.replace("/admin");
+      } else if (user.role === "driver") {
+        if (user.driverStatus === "pending" || user.driverStatus === "rejected") {
+          router.replace("/(driver)/pending");
+        } else {
+          router.replace("/(driver)");
+        }
+      } else {
+        router.replace("/(tabs)");
+      }
       return;
     }
 
-    if (user.role === "driver" && inPassengerTabs) {
-      router.replace("/(driver)");
+    if (user.role === "admin") {
+      if (!inAdmin) router.replace("/admin");
       return;
     }
 
-    if (user.role === "passenger" && inDriverArea) {
-      router.replace("/(tabs)");
+    if (user.role === "driver") {
+      const needsPending =
+        user.driverStatus === "pending" || user.driverStatus === "rejected";
+      if (needsPending && !inPending) {
+        router.replace("/(driver)/pending");
+        return;
+      }
+      if (!needsPending && inPending) {
+        router.replace("/(driver)");
+        return;
+      }
+      if (inPassengerTabs) {
+        router.replace("/(driver)");
+        return;
+      }
+      if (inAdmin) {
+        router.replace("/(driver)");
+        return;
+      }
+    }
+
+    if (user.role === "passenger") {
+      if (inDriverArea || inAdmin) {
+        router.replace("/(tabs)");
+      }
     }
   }, [user, hydrated, segments, router]);
 
@@ -63,6 +98,10 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: "Voltar" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(driver)" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="admin"
+        options={{ headerShown: false, animation: "fade" }}
+      />
       <Stack.Screen
         name="login"
         options={{ headerShown: false, animation: "fade" }}
