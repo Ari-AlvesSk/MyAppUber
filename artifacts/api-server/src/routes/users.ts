@@ -72,6 +72,7 @@ const upsertSchema = z.object({
   role: z.string().optional(),
   avatarColor: z.string().optional(),
   driverStatus: z.string().optional(),
+  driverRejectionReason: z.string().optional(),
   vehicleType: z.string().optional(),
   vehicleModel: z.string().optional(),
   vehiclePlate: z.string().optional(),

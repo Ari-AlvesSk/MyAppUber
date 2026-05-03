@@ -22,6 +22,7 @@ export type DriverRequest = {
   vehicleModel: string;
   vehiclePlate: string;
   status: DriverStatus;
+  rejectionReason?: string;
   createdAt: number;
 };
 
@@ -38,6 +39,7 @@ export type AuthUser = {
   vehicleModel?: string;
   vehiclePlate?: string;
   driverStatus?: DriverStatus;
+  driverRejectionReason?: string;
   createdAt: number;
 };
 
@@ -62,7 +64,7 @@ type AuthContextType = {
   updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   switchRole: () => Promise<void>;
   approveDriver: (id: string) => Promise<void>;
-  rejectDriver: (id: string) => Promise<void>;
+  rejectDriver: (id: string, reason: string) => Promise<void>;
   checkDriverStatus: () => Promise<DriverStatus | null>;
 };
 
@@ -82,6 +84,7 @@ function syncUserToApi(u: AuthUser) {
   api.upsertUser(u.id, {
     name: u.name, email: u.email, phone: u.phone, cpf: u.cpf,
     role: u.role, avatarColor: u.avatarColor, driverStatus: u.driverStatus,
+    driverRejectionReason: u.driverRejectionReason,
     vehicleType: u.vehicleType, vehicleModel: u.vehicleModel, vehiclePlate: u.vehiclePlate,
   }).catch(() => {});
   api.updatePassword(u.id, u.passwordHash).catch(() => {});
@@ -137,10 +140,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       id: string; role: string; name: string; email: string;
       phone: string; cpf: string; avatarColor?: string;
       vehicleType?: string; vehicleModel?: string; vehiclePlate?: string;
-      driverStatus?: string; createdAt: number;
+      driverStatus?: string; driverRejectionReason?: string; createdAt: number;
     };
     if (dbUser.role !== "admin" && dbUser.role !== role) {
       throw new Error(`Você está cadastrado como ${dbUser.role === "driver" ? "Motorista" : "Passageiro"}. Selecione o tipo correto.`);
+    }
+    if (dbUser.role === "driver" && dbUser.driverStatus === "rejected") {
+      throw new Error(`Seu registro como motorista não foi aprovado. Motivo: ${dbUser.driverRejectionReason ?? "não informado"}`);
     }
     const authed: AuthUser = {
       id: dbUser.id,
@@ -155,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       vehicleModel: dbUser.vehicleModel,
       vehiclePlate: dbUser.vehiclePlate,
       driverStatus: dbUser.driverStatus as AuthUser["driverStatus"],
+      driverRejectionReason: dbUser.driverRejectionReason,
       createdAt: dbUser.createdAt,
     };
     setUser(authed);
@@ -238,13 +245,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, persistUser]);
 
   const approveDriver = useCallback(async (id: string) => {
-    const updated = driverRequests.map((r) => r.id === id ? { ...r, status: "approved" as DriverStatus } : r);
+    const updated = driverRequests.map((r) => r.id === id ? { ...r, status: "approved" as DriverStatus, rejectionReason: undefined } : r);
     setDriverRequests(updated);
     await persistRequests(updated);
   }, [driverRequests, persistRequests]);
 
-  const rejectDriver = useCallback(async (id: string) => {
-    const updated = driverRequests.map((r) => r.id === id ? { ...r, status: "rejected" as DriverStatus } : r);
+  const rejectDriver = useCallback(async (id: string, reason: string) => {
+    const rejectionReason = reason.trim();
+    const updated = driverRequests.map((r) => r.id === id ? { ...r, status: "rejected" as DriverStatus, rejectionReason } : r);
     setDriverRequests(updated);
     await persistRequests(updated);
   }, [driverRequests, persistRequests]);

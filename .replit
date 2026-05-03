@@ -31,6 +31,10 @@ externalPort = 8081
 localPort = 20619
 externalPort = 80
 
+[[ports]]
+localPort = 20620
+externalPort = 3001
+
 [userenv]
 
 [userenv.shared]
