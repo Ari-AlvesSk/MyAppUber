@@ -101,7 +101,7 @@ export default function BookingScreen() {
     [distanceKm, selectedOption.pricePerKmCents, selectedOption.minPriceCents],
   );
 
-  const defaultPayment = payments.find((p) => p.id === defaultPaymentId);
+  const defaultPayment = payments.find((p) => p.id === defaultPaymentId) ?? payments[0];
 
   const handleSelectDestination = (p: Place) => {
     if (Platform.OS !== "web") {
@@ -140,6 +140,8 @@ export default function BookingScreen() {
   const topInset =
     Platform.OS === "web" ? Math.max(insets.top, 24) : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
+
+  const payIcon = defaultPayment?.id === "pix" ? "zap" : "dollar-sign";
 
   return (
     <KeyboardAvoidingView
@@ -210,12 +212,8 @@ export default function BookingScreen() {
             <View style={styles.routeRow}>
               <TextInput
                 value={query !== "" ? query : destination?.label ?? ""}
-                onChangeText={(t) => {
-                  setQuery(t);
-                }}
-                onFocus={() => {
-                  if (destination && query === "") setQuery("");
-                }}
+                onChangeText={(t) => { setQuery(t); }}
+                onFocus={() => { if (destination && query === "") setQuery(""); }}
                 placeholder="Para onde?"
                 placeholderTextColor={colors.mutedForeground}
                 style={[styles.input, { color: colors.foreground }]}
@@ -223,10 +221,7 @@ export default function BookingScreen() {
               />
               {destination ? (
                 <Text
-                  style={[
-                    styles.routeSub,
-                    { color: colors.mutedForeground },
-                  ]}
+                  style={[styles.routeSub, { color: colors.mutedForeground }]}
                   numberOfLines={1}
                 >
                   {destination.address}
@@ -243,14 +238,8 @@ export default function BookingScreen() {
             </Text>
             {filtered.length === 0 ? (
               <View style={styles.empty}>
-                <Feather
-                  name="search"
-                  size={22}
-                  color={colors.mutedForeground}
-                />
-                <Text
-                  style={[styles.emptyTxt, { color: colors.mutedForeground }]}
-                >
+                <Feather name="search" size={22} color={colors.mutedForeground} />
+                <Text style={[styles.emptyTxt, { color: colors.mutedForeground }]}>
                   Nenhum resultado para "{query}"
                 </Text>
               </View>
@@ -266,41 +255,19 @@ export default function BookingScreen() {
           </View>
         ) : (
           <>
-            <View
-              style={[styles.mapBox, { borderColor: colors.border }]}
-            >
+            <View style={[styles.mapBox, { borderColor: colors.border }]}>
               <MapCanvas height={200} showRoute />
-              <View
-                style={[
-                  styles.tripStats,
-                  { backgroundColor: colors.background },
-                ]}
-              >
+              <View style={[styles.tripStats, { backgroundColor: colors.background }]}>
                 <View style={styles.tripStat}>
                   <Feather name="clock" size={13} color={colors.foreground} />
-                  <Text
-                    style={[
-                      styles.tripStatTxt,
-                      { color: colors.foreground },
-                    ]}
-                  >
+                  <Text style={[styles.tripStatTxt, { color: colors.foreground }]}>
                     {tripDurationMin} min
                   </Text>
                 </View>
-                <View
-                  style={[
-                    styles.tripStatDivider,
-                    { backgroundColor: colors.border },
-                  ]}
-                />
+                <View style={[styles.tripStatDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.tripStat}>
                   <Feather name="map" size={13} color={colors.foreground} />
-                  <Text
-                    style={[
-                      styles.tripStatTxt,
-                      { color: colors.foreground },
-                    ]}
-                  >
+                  <Text style={[styles.tripStatTxt, { color: colors.foreground }]}>
                     {formatDistanceKm(distanceKm)}
                   </Text>
                 </View>
@@ -308,9 +275,7 @@ export default function BookingScreen() {
             </View>
 
             <View style={styles.section}>
-              <Text
-                style={[styles.sectionTitle, { color: colors.foreground }]}
-              >
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                 Escolha o tipo
               </Text>
               <View style={styles.options}>
@@ -351,16 +316,14 @@ export default function BookingScreen() {
               { backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1 },
             ]}
           >
-            <Feather name="credit-card" size={16} color={colors.foreground} />
+            <Feather name={payIcon} size={16} color={colors.foreground} />
             <Text style={[styles.payTxt, { color: colors.foreground }]}>
-              {defaultPayment ? defaultPayment.label : "Dinheiro"} ·{" "}
-              {defaultPayment?.detail ?? ""}
+              {defaultPayment?.label ?? "Pix"}
             </Text>
-            <Feather
-              name="chevron-right"
-              size={16}
-              color={colors.mutedForeground}
-            />
+            <Text style={[styles.payDetail, { color: colors.mutedForeground }]}>
+              {defaultPayment?.detail ?? "Transferência instantânea"}
+            </Text>
+            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
           </Pressable>
           <PrimaryButton
             label={`Confirmar ${selectedOption.name} · ${formatPrice(selectedPriceCents)}`}
@@ -384,22 +347,12 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
   },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
   scroll: { flex: 1 },
   routeBox: {
-    margin: 20,
-    flexDirection: "row",
-    gap: 14,
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1,
+    margin: 20, flexDirection: "row", gap: 14,
+    padding: 16, borderRadius: 18, borderWidth: 1,
   },
   routeIconCol: { alignItems: "center", paddingTop: 6 },
   dot: { width: 12, height: 12, borderRadius: 6 },
@@ -412,55 +365,33 @@ const styles = StyleSheet.create({
   divider: { height: 1, marginVertical: 6 },
   section: { paddingHorizontal: 20, paddingBottom: 12 },
   sectionTitle: {
-    fontSize: 13,
-    fontFamily: "Inter_700Bold",
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-    marginBottom: 10,
-    marginTop: 4,
+    fontSize: 13, fontFamily: "Inter_700Bold",
+    textTransform: "uppercase", letterSpacing: 1.2,
+    marginBottom: 10, marginTop: 4,
   },
   empty: { paddingVertical: 28, alignItems: "center", gap: 8 },
   emptyTxt: { fontSize: 13, fontFamily: "Inter_500Medium" },
   mapBox: {
-    marginHorizontal: 20,
-    marginBottom: 8,
-    borderRadius: 22,
-    overflow: "hidden",
-    borderWidth: 1,
-    position: "relative",
+    marginHorizontal: 20, marginBottom: 8,
+    borderRadius: 22, overflow: "hidden", borderWidth: 1, position: "relative",
   },
   tripStats: {
-    position: "absolute",
-    bottom: 12,
-    alignSelf: "center",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+    position: "absolute", bottom: 12, alignSelf: "center",
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
   },
   tripStat: { flexDirection: "row", alignItems: "center", gap: 6 },
   tripStatTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   tripStatDivider: { width: 1, height: 12 },
   options: { gap: 4 },
   bottomBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    gap: 10,
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 20, paddingTop: 14, borderTopWidth: 1, gap: 10,
   },
   payRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 14,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14,
   },
-  payTxt: { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  payTxt: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  payDetail: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular" },
 });

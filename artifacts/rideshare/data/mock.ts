@@ -1,4 +1,4 @@
-import type { Driver, PaymentMethod, Place, RideOption } from "@/types";
+import type { Driver, Place, RideOption } from "@/types";
 
 export const SAVED_PLACES: Place[] = [
   {
@@ -148,30 +148,6 @@ export const RIDE_OPTIONS: RideOption[] = [
     etaMinutes: 4,
     pricePerKmCents: 1000,
     minPriceCents: 800,
-  },
-];
-
-export const PAYMENT_METHODS: PaymentMethod[] = [
-  {
-    id: "p1",
-    type: "card",
-    label: "Visa",
-    detail: "•••• 4242",
-    isDefault: true,
-  },
-  {
-    id: "p2",
-    type: "card",
-    label: "Mastercard",
-    detail: "•••• 8819",
-    isDefault: false,
-  },
-  {
-    id: "p3",
-    type: "cash",
-    label: "Dinheiro",
-    detail: "Pague diretamente ao motorista",
-    isDefault: false,
   },
 ];
 

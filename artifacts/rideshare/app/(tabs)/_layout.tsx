@@ -14,15 +14,15 @@ function NativeTabLayout() {
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "location", selected: "location.fill" }} />
-        <Label>Ride</Label>
+        <Label>Início</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="activity">
         <Icon sf={{ default: "clock", selected: "clock.fill" }} />
-        <Label>Activity</Label>
+        <Label>Atividade</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="account">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>Account</Label>
+        <Label>Conta</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -38,11 +38,11 @@ function ClassicTabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.foreground,
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
         tabBarLabelStyle: {
-          fontFamily: "Inter_500Medium",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 11,
         },
         tabBarStyle: {
@@ -73,7 +73,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Ride",
+          title: "Início",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="location.fill" tintColor={color} size={24} />
@@ -85,7 +85,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="activity"
         options={{
-          title: "Activity",
+          title: "Atividade",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="clock.fill" tintColor={color} size={24} />
@@ -97,7 +97,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="account"
         options={{
-          title: "Account",
+          title: "Conta",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="person.fill" tintColor={color} size={24} />
