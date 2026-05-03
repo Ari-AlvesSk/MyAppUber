@@ -20,14 +20,23 @@ type LocationState = {
 };
 
 const LocationContext = createContext<LocationState | null>(null);
+const DEFAULT_COORDS = { latitude: -16.0028, longitude: -49.7903 };
+const DEFAULT_ADDRESS = "Paraúna, GO";
 
 export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [granted, setGranted] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
-  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [address, setAddress] = useState("Buscando localização...");
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(DEFAULT_COORDS);
+  const [address, setAddress] = useState(DEFAULT_ADDRESS);
   const [neighborhood, setNeighborhood] = useState("");
-  const [city, setCity] = useState("");
+  const [city, setCity] = useState("Paraúna");
+
+  const setFallback = useCallback(() => {
+    setCoords(DEFAULT_COORDS);
+    setAddress(DEFAULT_ADDRESS);
+    setNeighborhood("");
+    setCity("Paraúna");
+  }, []);
 
   const reverseGeocode = useCallback(async (lat: number, lng: number) => {
     try {
@@ -35,42 +44,45 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       const r = results[0];
       if (r) {
         const nb = r.district ?? r.subregion ?? r.street ?? "";
-        const ct = r.city ?? r.region ?? "";
-        const state = r.region ?? "";
+        const ct = r.city ?? r.region ?? "Paraúna";
+        const state = r.region ?? "GO";
         setNeighborhood(nb);
-        setCity(ct);
-        const parts = [nb, ct].filter(Boolean);
+        setCity(ct || "Paraúna");
+        const parts = [nb, ct || "Paraúna"].filter(Boolean);
         const stateAbbr = state.length > 3 ? state.slice(0, 2).toUpperCase() : state.toUpperCase();
-        setAddress(parts.length > 0 ? `${parts.join(", ")}${stateAbbr ? ", " + stateAbbr : ""}` : "Localização atual");
+        setAddress(parts.length > 0 ? `${parts.join(", ")}${stateAbbr ? ", " + stateAbbr : ""}` : DEFAULT_ADDRESS);
+        return;
       }
+      setFallback();
     } catch {
-      setAddress("Localização atual");
+      setFallback();
     }
-  }, []);
+  }, [setFallback]);
 
   const fetchLocation = useCallback(async () => {
     setLoading(true);
     try {
       const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.High,
       });
       const { latitude, longitude } = pos.coords;
       setCoords({ latitude, longitude });
       await reverseGeocode(latitude, longitude);
     } catch {
-      setAddress("Localização atual");
+      setFallback();
     } finally {
       setLoading(false);
     }
-  }, [reverseGeocode]);
+  }, [reverseGeocode, setFallback]);
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     const ok = status === "granted";
     setGranted(ok);
     if (ok) await fetchLocation();
+    else setFallback();
     return ok;
-  }, [fetchLocation]);
+  }, [fetchLocation, setFallback]);
 
   const refresh = useCallback(async () => {
     if (granted) await fetchLocation();
@@ -86,11 +98,11 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         await fetchLocation();
       } else {
         setGranted(false);
-        setAddress("Permitir localização");
+        setFallback();
       }
     })();
     return () => { active = false; };
-  }, [fetchLocation]);
+  }, [fetchLocation, setFallback]);
 
   const value = useMemo<LocationState>(
     () => ({ granted, loading, coords, address, neighborhood, city, requestPermission, refresh }),

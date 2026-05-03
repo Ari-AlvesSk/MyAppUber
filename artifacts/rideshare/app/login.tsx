@@ -35,8 +35,8 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     setError(null);
     const trimmed = email.trim().toLowerCase();
-    if (!trimmed.includes("@") || password.length < 4) {
-      setError("Informe um e-mail válido e uma senha com 4+ caracteres.");
+    if (!trimmed.includes("@") || password.length < 6) {
+      setError("Informe um e-mail válido e uma senha com pelo menos 6 caracteres.");
       return;
     }
     setSubmitting(true);
@@ -47,7 +47,9 @@ export default function LoginScreen() {
       else if (u.role === "driver") {
         if (u.driverStatus === "pending" || u.driverStatus === "rejected") router.replace("/(driver)/pending");
         else router.replace("/(driver)");
-      } else router.replace("/(tabs)");
+      } else {
+        router.replace("/(tabs)");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível entrar.");
     } finally {
@@ -63,7 +65,7 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={{ paddingTop: topPad + 16, paddingBottom: bottomPad, paddingHorizontal: 24 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.brandWrap}>
           <Text style={[styles.brandTitle, { color: colors.foreground }]}>Paraúna Mobi</Text>
-          <Text style={[styles.brandSubtitle, { color: colors.mutedForeground }]}>Mobilidade para você chegar mais rápido.</Text>
+          <Text style={[styles.brandSubtitle, { color: colors.mutedForeground }]}>Mobilidade em Paraúna, GO.</Text>
         </View>
         <Text style={[styles.headline, { color: colors.foreground }]}>Bem-vindo de volta</Text>
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>Entre para continuar usando o RideShare.</Text>
@@ -93,7 +95,15 @@ export default function LoginScreen() {
 
 function RoleCard({ label, description, icon, active, onPress }: { label: string; description: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"]; active: boolean; onPress: () => void; }) {
   const colors = useColors();
-  return <Pressable onPress={onPress} style={[styles.roleCard, { backgroundColor: active ? colors.foreground : colors.card }]}><MaterialCommunityIcons name={icon} size={20} color={active ? colors.background : colors.foreground} /><View><Text style={{ color: active ? colors.background : colors.foreground, fontWeight: "700" }}>{label}</Text><Text style={{ color: active ? colors.background : colors.mutedForeground }}>{description}</Text></View></Pressable>;
+  return (
+    <Pressable onPress={onPress} style={[styles.roleCard, { backgroundColor: active ? colors.foreground : colors.card }]}> 
+      <MaterialCommunityIcons name={icon} size={20} color={active ? colors.background : colors.foreground} />
+      <View>
+        <Text style={{ color: active ? colors.background : colors.foreground, fontWeight: "700" }}>{label}</Text>
+        <Text style={{ color: active ? colors.background : colors.mutedForeground }}>{description}</Text>
+      </View>
+    </Pressable>
+  );
 }
 
-const styles = StyleSheet.create({ root: { flex: 1 }, brandWrap: { alignItems: "center", marginBottom: 18 }, brandTitle: { fontSize: 38, fontWeight: "900", letterSpacing: 0.5, textAlign: "center" }, brandSubtitle: { marginTop: 6, textAlign: "center" }, headline: { fontSize: 34, fontWeight: "800" }, sub: { marginTop: 8, marginBottom: 18 }, fieldLabel: { marginTop: 14, marginBottom: 8 }, roleRow: { flexDirection: "row", gap: 12 }, roleCard: { flex: 1, padding: 18, borderRadius: 18, flexDirection: "row", gap: 12, alignItems: "center" }, input: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 }, inputTxt: { flex: 1 }, error: { marginTop: 6, marginBottom: 10 }, footer: { marginTop: 18, textAlign: "center" } });
+const styles = StyleSheet.create({ root: { flex: 1 }, brandWrap: { alignItems: "center", marginBottom: 18 }, brandTitle: { fontSize: 42, fontWeight: "900", letterSpacing: 0.5, textAlign: "center" }, brandSubtitle: { marginTop: 6, textAlign: "center" }, headline: { fontSize: 34, fontWeight: "800" }, sub: { marginTop: 8, marginBottom: 18 }, fieldLabel: { marginTop: 14, marginBottom: 8 }, roleRow: { flexDirection: "row", gap: 12 }, roleCard: { flex: 1, padding: 18, borderRadius: 18, flexDirection: "row", gap: 12, alignItems: "center" }, input: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 }, inputTxt: { flex: 1 }, error: { marginTop: 6, marginBottom: 10 }, footer: { marginTop: 18, textAlign: "center" } });

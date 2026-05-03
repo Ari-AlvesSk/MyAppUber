@@ -110,8 +110,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(REQUESTS_KEY),
         ]);
         if (!mounted) return;
-        if (authRaw) { try { setUser(JSON.parse(authRaw) as AuthUser); } catch {} }
-        if (reqRaw) { try { setDriverRequests(JSON.parse(reqRaw) as DriverRequest[]); } catch {} }
+        if (authRaw) {
+          try {
+            setUser(JSON.parse(authRaw) as AuthUser);
+          } catch {
+            await AsyncStorage.removeItem(AUTH_KEY);
+          }
+        }
+        if (reqRaw) {
+          try {
+            setDriverRequests(JSON.parse(reqRaw) as DriverRequest[]);
+          } catch {
+            await AsyncStorage.removeItem(REQUESTS_KEY);
+          }
+        }
       } finally {
         if (mounted) setHydrated(true);
       }
@@ -122,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const persistUser = useCallback(async (u: AuthUser | null) => {
     if (u) {
       await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(u));
-      syncUserToApi(u);
+      await syncUserToApi(u);
     } else {
       await AsyncStorage.removeItem(AUTH_KEY);
     }
@@ -134,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback<AuthContextType["login"]>(async (role, email, password) => {
     const emailNorm = normalizeEmail(email);
-    const found = await api.findExistingUser({ email: emailNorm, phone: "", cpf: "" });
+    const found = await api.getUserByEmailPhoneCpf(emailNorm, "", "");
     if (!found.exists || !found.user) throw new Error("Usuário não cadastrado. Faça o registro primeiro.");
     const existing = found.user as AuthUser;
     if (existing.role === "admin") {
@@ -155,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const email = normalizeEmail(input.email);
     const phone = normalizePhone(input.phone);
     const cpf = normalizeCpf(input.cpf);
-    const duplicate = await api.findExistingUser({ email, phone, cpf });
+    const duplicate = await api.getUserByEmailPhoneCpf(email, phone, cpf);
     if (duplicate.exists) throw new Error("Já existe uma conta com este e-mail, telefone ou CPF.");
     const next: AuthUser = {
       id: generateId(),
@@ -198,16 +210,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     const next: AuthUser = { ...user, ...patch };
     setUser(next);
-    await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(next));
-    syncUserToApi(next);
-  }, [user]);
+    await persistUser(next);
+  }, [user, persistUser]);
   const updatePassword = useCallback(async (newPasswordHash: string) => {
     if (!user) return;
     const next = { ...user, passwordHash: newPasswordHash };
     setUser(next);
-    await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(next));
-    syncUserToApi(next);
-  }, [user]);
+    await persistUser(next);
+  }, [user, persistUser]);
   const switchRole = useCallback(async () => {
     if (!user) return;
     const nextRole: UserRole = user.role === "passenger" ? "driver" : "passenger";
