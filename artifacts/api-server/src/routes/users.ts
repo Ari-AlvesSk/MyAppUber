@@ -4,12 +4,37 @@ import { z } from "zod";
 
 const router = Router();
 
+function normalizeUser(raw: Record<string, unknown>) {
+  const { _id, passwordHash: _ph, createdAt, updatedAt, ...rest } = raw;
+  return {
+    id: String(_id),
+    ...rest,
+    createdAt: createdAt instanceof Date ? createdAt.getTime() : typeof createdAt === "string" ? new Date(createdAt).getTime() : Date.now(),
+    updatedAt: updatedAt instanceof Date ? updatedAt.getTime() : typeof updatedAt === "string" ? new Date(updatedAt).getTime() : Date.now(),
+  };
+}
+
+router.post("/login", async (req, res) => {
+  const body = z.object({ email: z.string().email(), password: z.string().min(1) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "E-mail e senha são obrigatórios." });
+  try {
+    const email = body.data.email.toLowerCase();
+    const expectedHash = `hashed_${body.data.password}`;
+    const user = await UserModel.findOne({ email }).lean();
+    if (!user) return res.status(401).json({ error: "Usuário não cadastrado. Faça o registro primeiro." });
+    if (user.passwordHash !== expectedHash) return res.status(401).json({ error: "Senha incorreta." });
+    return res.json({ ok: true, user: normalizeUser(user as unknown as Record<string, unknown>) });
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Erro interno. Tente novamente." });
+  }
+});
+
 router.get("/:id", async (req, res) => {
   try {
     const user = await UserModel.findById(req.params.id).lean();
     if (!user) return res.status(404).json({ error: "User not found" });
-    const { passwordHash: _, ...safe } = user as unknown as Record<string, unknown>;
-    return res.json(safe);
+    return res.json(normalizeUser(user as unknown as Record<string, unknown>));
   } catch (err) {
     req.log.error(err);
     return res.status(500).json({ error: "Internal error" });
@@ -31,10 +56,8 @@ router.get("/lookup/check", async (req, res) => {
     if (phone) conditions.push({ phone });
     if (cpf) conditions.push({ cpf });
     const user = await UserModel.findOne({ $or: conditions }).lean();
-
     if (!user) return res.json({ exists: false });
-    const { passwordHash: _, ...safe } = user as unknown as Record<string, unknown>;
-    return res.json({ exists: true, user: safe });
+    return res.json({ exists: true, user: normalizeUser(user as unknown as Record<string, unknown>) });
   } catch (err) {
     req.log.error(err);
     return res.status(500).json({ error: "Internal error" });
@@ -44,8 +67,8 @@ router.get("/lookup/check", async (req, res) => {
 const upsertSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  phone: z.string().min(10),
-  cpf: z.string().min(11),
+  phone: z.string().min(1),
+  cpf: z.string().min(1),
   role: z.string().optional(),
   avatarColor: z.string().optional(),
   driverStatus: z.string().optional(),
@@ -57,7 +80,6 @@ const upsertSchema = z.object({
 router.put("/:id", async (req, res) => {
   const parsed = upsertSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error });
-
   try {
     await UserModel.findByIdAndUpdate(
       req.params.id,
@@ -76,7 +98,6 @@ const pwdSchema = z.object({ passwordHash: z.string().min(1) });
 router.patch("/:id/password", async (req, res) => {
   const parsed = pwdSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error });
-
   try {
     await UserModel.findByIdAndUpdate(req.params.id, { passwordHash: parsed.data.passwordHash });
     return res.json({ ok: true });
@@ -91,11 +112,10 @@ router.post("/admin-seed", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: body.error });
   try {
     const email = body.data.email.toLowerCase();
-    const id = "admin";
     await UserModel.findByIdAndUpdate(
-      id,
+      "admin",
       {
-        _id: id,
+        _id: "admin",
         role: "admin",
         name: "Administrador",
         email,

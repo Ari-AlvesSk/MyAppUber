@@ -13,11 +13,27 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
     ...options,
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const body = await res.json() as { error?: string };
+      if (body?.error) msg = body.error;
+    } catch {}
+    throw new Error(msg);
+  }
   return res.json() as Promise<T>;
 }
 
 export const api = {
+  loginUser: (email: string, password: string) =>
+    request<{ ok: boolean; user: Record<string, unknown> }>("/users/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  checkUserExists: (email: string, phone: string, cpf: string) =>
+    request<{ exists: boolean; user?: unknown }>(
+      `/users/lookup/check?email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}&cpf=${encodeURIComponent(cpf)}`,
+    ),
   getUserByEmailPhoneCpf: (email: string, phone: string, cpf: string) =>
     request<{ exists: boolean; user?: unknown }>(
       `/users/lookup/check?email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}&cpf=${encodeURIComponent(cpf)}`,

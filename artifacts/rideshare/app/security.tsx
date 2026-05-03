@@ -53,12 +53,15 @@ export default function SecurityScreen() {
     if (!currentPwd || !newPwd || !confirmPwd) { setPwdError("Preencha todos os campos."); return; }
     if (newPwd.length < 6) { setPwdError("A nova senha deve ter pelo menos 6 caracteres."); return; }
     if (newPwd !== confirmPwd) { setPwdError("As senhas não coincidem."); return; }
-    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    // Save to DB (hash is a simple marker since this is a demo — real app would bcrypt)
-    await updatePassword(`hashed_${newPwd}`);
-    setPwdSaved(true);
-    setCurrentPwd(""); setNewPwd(""); setConfirmPwd("");
-    setTimeout(() => setPwdSaved(false), 3000);
+    try {
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      await updatePassword(currentPwd, newPwd);
+      setPwdSaved(true);
+      setCurrentPwd(""); setNewPwd(""); setConfirmPwd("");
+      setTimeout(() => setPwdSaved(false), 3000);
+    } catch (e) {
+      setPwdError(e instanceof Error ? e.message : "Erro ao alterar senha.");
+    }
   };
 
   return (

@@ -59,7 +59,7 @@ type AuthContextType = {
   }) => Promise<AuthUser>;
   logout: () => Promise<void>;
   updateUser: (patch: Partial<Pick<AuthUser, "name" | "email" | "phone" | "cpf" | "avatarColor">>) => Promise<void>;
-  updatePassword: (newPasswordHash: string) => Promise<void>;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   switchRole: () => Promise<void>;
   approveDriver: (id: string) => Promise<void>;
   rejectDriver: (id: string) => Promise<void>;
@@ -67,33 +67,24 @@ type AuthContextType = {
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
-const AUTH_KEY = "rideshare:auth:v1";
-const REQUESTS_KEY = "rideshare:driver_requests:v1";
-const ADMIN_EMAIL = "administradorparaunamobi@bussines.com";
+const AUTH_KEY = "rideshare:auth:v2";
+const REQUESTS_KEY = "rideshare:driver_requests:v2";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
-function normalizeEmail(email: string): string { return email.trim().toLowerCase(); }
-function normalizePhone(phone: string): string { return phone.replace(/\D/g, ""); }
-function normalizeCpf(cpf: string): string { return cpf.replace(/\D/g, ""); }
-function hashPassword(password: string): string { return `hashed_${password}`; }
-async function syncUserToApi(u: AuthUser): Promise<void> {
-  try {
-    await api.upsertUser(u.id, {
-      name: u.name,
-      email: u.email,
-      phone: u.phone,
-      cpf: u.cpf,
-      role: u.role,
-      avatarColor: u.avatarColor,
-      driverStatus: u.driverStatus,
-      vehicleType: u.vehicleType,
-      vehicleModel: u.vehicleModel,
-      vehiclePlate: u.vehiclePlate,
-    });
-    await api.updatePassword(u.id, u.passwordHash);
-  } catch {}
+function normalizeEmail(e: string) { return e.trim().toLowerCase(); }
+function normalizePhone(p: string) { return p.replace(/\D/g, ""); }
+function normalizeCpf(c: string) { return c.replace(/\D/g, ""); }
+function hashPassword(p: string) { return `hashed_${p}`; }
+
+function syncUserToApi(u: AuthUser) {
+  api.upsertUser(u.id, {
+    name: u.name, email: u.email, phone: u.phone, cpf: u.cpf,
+    role: u.role, avatarColor: u.avatarColor, driverStatus: u.driverStatus,
+    vehicleType: u.vehicleType, vehicleModel: u.vehicleModel, vehiclePlate: u.vehiclePlate,
+  }).catch(() => {});
+  api.updatePassword(u.id, u.passwordHash).catch(() => {});
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -111,18 +102,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ]);
         if (!mounted) return;
         if (authRaw) {
-          try {
-            setUser(JSON.parse(authRaw) as AuthUser);
-          } catch {
-            await AsyncStorage.removeItem(AUTH_KEY);
-          }
+          try { setUser(JSON.parse(authRaw) as AuthUser); }
+          catch { await AsyncStorage.removeItem(AUTH_KEY); }
         }
         if (reqRaw) {
-          try {
-            setDriverRequests(JSON.parse(reqRaw) as DriverRequest[]);
-          } catch {
-            await AsyncStorage.removeItem(REQUESTS_KEY);
-          }
+          try { setDriverRequests(JSON.parse(reqRaw) as DriverRequest[]); }
+          catch { await AsyncStorage.removeItem(REQUESTS_KEY); }
         }
       } finally {
         if (mounted) setHydrated(true);
@@ -134,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const persistUser = useCallback(async (u: AuthUser | null) => {
     if (u) {
       await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(u));
-      await syncUserToApi(u);
+      syncUserToApi(u);
     } else {
       await AsyncStorage.removeItem(AUTH_KEY);
     }
@@ -146,78 +131,104 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback<AuthContextType["login"]>(async (role, email, password) => {
     const emailNorm = normalizeEmail(email);
-    const found = await api.getUserByEmailPhoneCpf(emailNorm, "", "");
-    if (!found.exists || !found.user) throw new Error("Usuário não cadastrado. Faça o registro primeiro.");
-    const existing = found.user as AuthUser;
-    if (existing.role === "admin") {
-      if (emailNorm !== ADMIN_EMAIL) throw new Error("Acesso de admin inválido.");
-      if (existing.passwordHash !== hashPassword(password)) throw new Error("Senha incorreta.");
-      setUser(existing);
-      await persistUser(existing);
-      return existing;
+    const result = await api.loginUser(emailNorm, password);
+    const raw = result.user;
+    const dbUser = raw as {
+      id: string; role: string; name: string; email: string;
+      phone: string; cpf: string; avatarColor?: string;
+      vehicleType?: string; vehicleModel?: string; vehiclePlate?: string;
+      driverStatus?: string; createdAt: number;
+    };
+    if (dbUser.role !== "admin" && dbUser.role !== role) {
+      throw new Error(`Você está cadastrado como ${dbUser.role === "driver" ? "Motorista" : "Passageiro"}. Selecione o tipo correto.`);
     }
-    if (existing.passwordHash !== hashPassword(password)) throw new Error("Senha incorreta.");
-    if (existing.role !== role) throw new Error("Tipo de usuário diferente do cadastro.");
-    setUser(existing);
-    await persistUser(existing);
-    return existing;
+    const authed: AuthUser = {
+      id: dbUser.id,
+      role: dbUser.role as UserRole,
+      name: dbUser.name,
+      email: dbUser.email,
+      phone: dbUser.phone,
+      cpf: dbUser.cpf,
+      passwordHash: hashPassword(password),
+      avatarColor: dbUser.avatarColor,
+      vehicleType: dbUser.vehicleType as AuthUser["vehicleType"],
+      vehicleModel: dbUser.vehicleModel,
+      vehiclePlate: dbUser.vehiclePlate,
+      driverStatus: dbUser.driverStatus as AuthUser["driverStatus"],
+      createdAt: dbUser.createdAt,
+    };
+    setUser(authed);
+    await persistUser(authed);
+    return authed;
   }, [persistUser]);
 
   const register = useCallback<AuthContextType["register"]>(async (input) => {
     const email = normalizeEmail(input.email);
     const phone = normalizePhone(input.phone);
     const cpf = normalizeCpf(input.cpf);
-    const duplicate = await api.getUserByEmailPhoneCpf(email, phone, cpf);
+    const duplicate = await api.checkUserExists(email, phone, cpf);
     if (duplicate.exists) throw new Error("Já existe uma conta com este e-mail, telefone ou CPF.");
+    const id = generateId();
+    const pwdHash = hashPassword(input.password);
     const next: AuthUser = {
-      id: generateId(),
+      id,
       role: input.role,
       name: input.name,
       email,
       phone,
       cpf,
-      passwordHash: hashPassword(input.password),
+      passwordHash: pwdHash,
       vehicleType: input.vehicleType,
       vehicleModel: input.vehicleModel,
       vehiclePlate: input.vehiclePlate,
       driverStatus: input.role === "driver" ? "pending" : undefined,
       createdAt: Date.now(),
     };
+    await api.upsertUser(id, {
+      name: next.name, email: next.email, phone: next.phone, cpf: next.cpf,
+      role: next.role, driverStatus: next.driverStatus,
+      vehicleType: next.vehicleType, vehicleModel: next.vehicleModel, vehiclePlate: next.vehiclePlate,
+    });
+    await api.updatePassword(id, pwdHash);
     if (input.role === "driver") {
       const newReq: DriverRequest = {
-        id: next.id,
-        name: input.name,
-        email,
-        phone,
-        cpf,
+        id, name: input.name, email, phone, cpf,
         vehicleType: input.vehicleType ?? "car",
         vehicleModel: input.vehicleModel ?? "",
         vehiclePlate: input.vehiclePlate ?? "",
-        status: "pending",
-        createdAt: Date.now(),
+        status: "pending", createdAt: Date.now(),
       };
       const updatedReqs = [...driverRequests, newReq];
       setDriverRequests(updatedReqs);
       await persistRequests(updatedReqs);
     }
     setUser(next);
-    await persistUser(next);
+    await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(next));
     return next;
-  }, [driverRequests, persistRequests, persistUser]);
+  }, [driverRequests, persistRequests]);
 
-  const logout = useCallback(async () => { setUser(null); await persistUser(null); }, [persistUser]);
+  const logout = useCallback(async () => {
+    setUser(null);
+    await AsyncStorage.removeItem(AUTH_KEY);
+  }, []);
+
   const updateUser = useCallback(async (patch: Partial<Pick<AuthUser, "name" | "email" | "phone" | "cpf" | "avatarColor">>) => {
     if (!user) return;
     const next: AuthUser = { ...user, ...patch };
     setUser(next);
     await persistUser(next);
   }, [user, persistUser]);
-  const updatePassword = useCallback(async (newPasswordHash: string) => {
+
+  const updatePassword = useCallback(async (currentPassword: string, newPassword: string) => {
     if (!user) return;
-    const next = { ...user, passwordHash: newPasswordHash };
+    if (user.passwordHash !== hashPassword(currentPassword)) throw new Error("Senha atual incorreta.");
+    const newHash = hashPassword(newPassword);
+    const next: AuthUser = { ...user, passwordHash: newHash };
     setUser(next);
-    await persistUser(next);
-  }, [user, persistUser]);
+    await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(next));
+    await api.updatePassword(user.id, newHash);
+  }, [user]);
+
   const switchRole = useCallback(async () => {
     if (!user) return;
     const nextRole: UserRole = user.role === "passenger" ? "driver" : "passenger";
@@ -225,19 +236,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(next);
     await persistUser(next);
   }, [user, persistUser]);
+
   const approveDriver = useCallback(async (id: string) => {
     const updated = driverRequests.map((r) => r.id === id ? { ...r, status: "approved" as DriverStatus } : r);
     setDriverRequests(updated);
     await persistRequests(updated);
   }, [driverRequests, persistRequests]);
+
   const rejectDriver = useCallback(async (id: string) => {
     const updated = driverRequests.map((r) => r.id === id ? { ...r, status: "rejected" as DriverStatus } : r);
     setDriverRequests(updated);
     await persistRequests(updated);
   }, [driverRequests, persistRequests]);
+
   const checkDriverStatus = useCallback(async (): Promise<DriverStatus | null> => user?.driverStatus ?? null, [user]);
 
-  const value = useMemo<AuthContextType>(() => ({ user, hydrated, driverRequests, login, register, logout, updateUser, updatePassword, switchRole, approveDriver, rejectDriver, checkDriverStatus }), [user, hydrated, driverRequests, login, register, logout, updateUser, updatePassword, switchRole, approveDriver, rejectDriver, checkDriverStatus]);
+  const value = useMemo<AuthContextType>(() => ({
+    user, hydrated, driverRequests,
+    login, register, logout, updateUser, updatePassword,
+    switchRole, approveDriver, rejectDriver, checkDriverStatus,
+  }), [user, hydrated, driverRequests, login, register, logout, updateUser, updatePassword, switchRole, approveDriver, rejectDriver, checkDriverStatus]);
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
