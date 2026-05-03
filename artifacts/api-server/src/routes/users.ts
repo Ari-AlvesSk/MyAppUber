@@ -26,7 +26,7 @@ router.get("/lookup/check", async (req, res) => {
   }
 
   try {
-    const conditions = [] as Array<Record<string, string>>;
+    const conditions: Record<string, string>[] = [];
     if (email) conditions.push({ email });
     if (phone) conditions.push({ phone });
     if (cpf) conditions.push({ cpf });
@@ -79,6 +79,32 @@ router.patch("/:id/password", async (req, res) => {
 
   try {
     await UserModel.findByIdAndUpdate(req.params.id, { passwordHash: parsed.data.passwordHash });
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.post("/admin-seed", async (req, res) => {
+  const body = z.object({ email: z.string().email(), password: z.string().min(6) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: body.error });
+  try {
+    const email = body.data.email.toLowerCase();
+    const id = "admin";
+    await UserModel.findByIdAndUpdate(
+      id,
+      {
+        _id: id,
+        role: "admin",
+        name: "Administrador",
+        email,
+        phone: "00000000000",
+        cpf: "00000000000",
+        passwordHash: `hashed_${body.data.password}`,
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
     return res.json({ ok: true });
   } catch (err) {
     req.log.error(err);
