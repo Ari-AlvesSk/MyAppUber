@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -76,8 +76,9 @@ export default function PendingScreen() {
           {checking ? <ActivityIndicator color={colors.accentForeground} /> : <><Feather name="refresh-cw" size={16} color={colors.accentForeground} /><Text style={[styles.checkTxt, { color: colors.accentForeground }]}>Verificar status</Text></>}
         </Pressable>
 
-        <Pressable onPress={handleLogout} style={({ pressed }) => [styles.logoutBtn, { opacity: pressed ? 0.6 : 1 }]}>
-          <Text style={[styles.logoutTxt, { color: colors.mutedForeground }]}>Sair da conta</Text>
+        <Pressable onPress={handleLogout} style={({ pressed }) => [styles.logoutBtn, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
+          <Feather name="log-out" size={16} color={colors.mutedForeground} />
+          <Text style={[styles.logoutTxt, { color: colors.mutedForeground }]}>Sair</Text>
         </Pressable>
       </View>
     </View>
@@ -97,6 +98,6 @@ const styles = StyleSheet.create({
   msgTxt: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1, lineHeight: 18 },
   checkBtn: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 54, borderRadius: 16, marginTop: 8 },
   checkTxt: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  logoutBtn: { marginTop: 4 },
-  logoutTxt: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  logoutBtn: { marginTop: 4, width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 50, borderRadius: 16, borderWidth: 1 },
+  logoutTxt: { fontSize: 14, fontFamily: "Inter_700Bold" },
 });
