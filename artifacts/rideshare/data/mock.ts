@@ -15,33 +15,7 @@ export const SAVED_PLACES: Place[] = [
   },
 ];
 
-export const RECENT_PLACES: Place[] = [
-  {
-    id: "r1",
-    label: "Parque Ibirapuera",
-    address: "Av. Pedro Álvares Cabral, s/n – Vila Mariana, SP",
-  },
-  {
-    id: "r2",
-    label: "Aeroporto GRU – Terminal 2",
-    address: "Rod. Hélio Smidt, s/n – Cumbica, Guarulhos",
-  },
-  {
-    id: "r3",
-    label: "Shopping JK Iguatemi",
-    address: "Av. Pres. Juscelino Kubitschek, 2041 – Itaim Bibi, SP",
-  },
-  {
-    id: "r4",
-    label: "MASP",
-    address: "Av. Paulista, 1578 – Bela Vista, São Paulo",
-  },
-  {
-    id: "r5",
-    label: "Vila Madalena",
-    address: "Rua Aspicuelta, 130 – Vila Madalena, São Paulo",
-  },
-];
+export const RECENT_PLACES: Place[] = [];
 
 export const SUGGESTED_PLACES: Place[] = [
   {
@@ -173,11 +147,6 @@ const PLACE_DISTANCE_OVERRIDES: Record<string, number> = {
   current: 0,
   home: 4.2,
   work: 6.0,
-  r1: 3.8,
-  r2: 21.4,
-  r3: 2.6,
-  r4: 1.9,
-  r5: 5.7,
   s1: 4.5,
   s2: 7.3,
   s3: 6.1,
