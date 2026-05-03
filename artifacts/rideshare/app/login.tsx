@@ -59,8 +59,12 @@ export default function LoginScreen() {
   const bottomPad = Platform.OS === "web" ? 24 : Math.max(insets.bottom + 12, 24);
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}> 
       <ScrollView contentContainerStyle={{ paddingTop: topPad + 16, paddingBottom: bottomPad, paddingHorizontal: 24 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={styles.brandWrap}>
+          <Text style={[styles.brandTitle, { color: colors.foreground }]}>Paraúna Mobi</Text>
+          <Text style={[styles.brandSubtitle, { color: colors.mutedForeground }]}>Mobilidade para você chegar mais rápido.</Text>
+        </View>
         <Text style={[styles.headline, { color: colors.foreground }]}>Bem-vindo de volta</Text>
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>Entre para continuar usando o RideShare.</Text>
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Entrar como</Text>
@@ -69,12 +73,12 @@ export default function LoginScreen() {
           <RoleCard label="Motorista" description="Aceitar corridas" icon="steering" active={role === "driver"} onPress={() => setRole("driver")} />
         </View>
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>E-mail</Text>
-        <View style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}> 
           <Feather name="mail" size={16} color={colors.mutedForeground} />
           <TextInput value={email} onChangeText={setEmail} placeholder="voce@email.com" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" style={[styles.inputTxt, { color: colors.foreground }]} />
         </View>
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Senha</Text>
-        <View style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}> 
           <Feather name="lock" size={16} color={colors.mutedForeground} />
           <TextInput value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.mutedForeground} secureTextEntry={!showPassword} style={[styles.inputTxt, { color: colors.foreground }]} />
           <Pressable onPress={() => setShowPassword((s) => !s)} hitSlop={8}><Feather name={showPassword ? "eye-off" : "eye"} size={16} color={colors.mutedForeground} /></Pressable>
@@ -92,4 +96,4 @@ function RoleCard({ label, description, icon, active, onPress }: { label: string
   return <Pressable onPress={onPress} style={[styles.roleCard, { backgroundColor: active ? colors.foreground : colors.card }]}><MaterialCommunityIcons name={icon} size={20} color={active ? colors.background : colors.foreground} /><View><Text style={{ color: active ? colors.background : colors.foreground, fontWeight: "700" }}>{label}</Text><Text style={{ color: active ? colors.background : colors.mutedForeground }}>{description}</Text></View></Pressable>;
 }
 
-const styles = StyleSheet.create({ root: { flex: 1 }, headline: { fontSize: 34, fontWeight: "800" }, sub: { marginTop: 8, marginBottom: 18 }, fieldLabel: { marginTop: 14, marginBottom: 8 }, roleRow: { flexDirection: "row", gap: 12 }, roleCard: { flex: 1, padding: 18, borderRadius: 18, flexDirection: "row", gap: 12, alignItems: "center" }, input: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 }, inputTxt: { flex: 1 }, error: { marginTop: 6, marginBottom: 10 }, footer: { marginTop: 18, textAlign: "center" } });
+const styles = StyleSheet.create({ root: { flex: 1 }, brandWrap: { alignItems: "center", marginBottom: 18 }, brandTitle: { fontSize: 38, fontWeight: "900", letterSpacing: 0.5, textAlign: "center" }, brandSubtitle: { marginTop: 6, textAlign: "center" }, headline: { fontSize: 34, fontWeight: "800" }, sub: { marginTop: 8, marginBottom: 18 }, fieldLabel: { marginTop: 14, marginBottom: 8 }, roleRow: { flexDirection: "row", gap: 12 }, roleCard: { flex: 1, padding: 18, borderRadius: 18, flexDirection: "row", gap: 12, alignItems: "center" }, input: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 }, inputTxt: { flex: 1 }, error: { marginTop: 6, marginBottom: 10 }, footer: { marginTop: 18, textAlign: "center" } });

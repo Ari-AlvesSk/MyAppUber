@@ -70,7 +70,6 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const AUTH_KEY = "rideshare:auth:v1";
 const REQUESTS_KEY = "rideshare:driver_requests:v1";
 const ADMIN_EMAIL = "administradorparaunamobi@bussines.com";
-const ADMIN_PASSWORD = "paraunamobi20268118";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -135,27 +134,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback<AuthContextType["login"]>(async (role, email, password) => {
     const emailNorm = normalizeEmail(email);
-    if (emailNorm === ADMIN_EMAIL) {
-      if (password !== ADMIN_PASSWORD) throw new Error("Senha incorreta.");
-      const admin: AuthUser = {
-        id: "admin",
-        role: "admin",
-        name: "Administrador",
-        email: ADMIN_EMAIL,
-        phone: "00000000000",
-        cpf: "00000000000",
-        passwordHash: hashPassword(password),
-        createdAt: Date.now(),
-      };
-      setUser(admin);
-      await persistUser(admin);
-      return admin;
-    }
     const found = await api.findExistingUser({ email: emailNorm, phone: "", cpf: "" });
     if (!found.exists || !found.user) throw new Error("Usuário não cadastrado. Faça o registro primeiro.");
     const existing = found.user as AuthUser;
+    if (existing.role === "admin") {
+      if (emailNorm !== ADMIN_EMAIL) throw new Error("Acesso de admin inválido.");
+      if (existing.passwordHash !== hashPassword(password)) throw new Error("Senha incorreta.");
+      setUser(existing);
+      await persistUser(existing);
+      return existing;
+    }
     if (existing.passwordHash !== hashPassword(password)) throw new Error("Senha incorreta.");
-    if (existing.role !== role && existing.role !== "admin") throw new Error("Tipo de usuário diferente do cadastro.");
+    if (existing.role !== role) throw new Error("Tipo de usuário diferente do cadastro.");
     setUser(existing);
     await persistUser(existing);
     return existing;
