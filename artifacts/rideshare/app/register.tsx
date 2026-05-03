@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useAuth, type UserRole } from "@/context/AuthContext";
+import { useRides } from "@/context/RideContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function RegisterScreen() {
@@ -23,6 +24,7 @@ export default function RegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { register } = useAuth();
+  const { setUserId } = useRides();
 
   const [role, setRole] = useState<UserRole>("passenger");
   const [name, setName] = useState("");
@@ -84,6 +86,7 @@ export default function RegisterScreen() {
             }
           : {}),
       });
+      await setUserId(u.id);
       if (u.role === "driver") {
         router.replace("/(driver)/pending");
       } else {

@@ -95,6 +95,7 @@ function RootLayoutNav() {
       <Stack.Screen name="notifications" options={{ headerShown: false, ...slideRight }} />
       <Stack.Screen name="help" options={{ headerShown: false, ...slideRight }} />
       <Stack.Screen name="legal" options={{ headerShown: false, ...slideRight }} />
+      <Stack.Screen name="location-picker" options={{ headerShown: false, animation: "slide_from_bottom" }} />
     </Stack>
   );
 }

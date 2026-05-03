@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useAuth, type UserRole } from "@/context/AuthContext";
+import { useRides } from "@/context/RideContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function LoginScreen() {
@@ -23,6 +24,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { login } = useAuth();
+  const { setUserId } = useRides();
 
   const [role, setRole] = useState<UserRole>("passenger");
   const [email, setEmail] = useState("");
@@ -44,6 +46,7 @@ export default function LoginScreen() {
     }
     try {
       const u = await login(role, trimmed);
+      await setUserId(u.id);
       if (u.role === "admin") {
         router.replace("/admin");
       } else if (u.role === "driver") {

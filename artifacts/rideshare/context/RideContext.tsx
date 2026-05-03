@@ -7,7 +7,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-
+import { api } from "@/utils/api";
 import type { PaymentMethod, Ride } from "@/types";
 
 const STORAGE_KEYS = {
@@ -15,6 +15,7 @@ const STORAGE_KEYS = {
   platformRides: "rideshare:platform_rides:v1",
   customPayments: "rideshare:custom_payments:v1",
   defaultPayment: "rideshare:defaultPayment:v1",
+  userId: "rideshare:userId:v1",
 };
 
 const BASE_PAYMENTS: PaymentMethod[] = [
@@ -31,6 +32,8 @@ type RideContextType = {
   payments: PaymentMethod[];
   defaultPaymentId: string;
   hydrated: boolean;
+  userId: string | null;
+  setUserId: (id: string) => Promise<void>;
   addRide: (ride: Ride) => Promise<void>;
   updateRide: (id: string, patch: Partial<Ride>) => Promise<void>;
   cancelRide: (id: string) => Promise<void>;
@@ -48,6 +51,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const [customPayments, setCustomPayments] = useState<PaymentMethod[]>([]);
   const [defaultPaymentId, setDefaultPaymentIdState] = useState<string>("pix");
   const [hydrated, setHydrated] = useState(false);
+  const [userId, setUserIdState] = useState<string | null>(null);
 
   const payments = useMemo<PaymentMethod[]>(
     () => [...BASE_PAYMENTS, ...customPayments],
@@ -58,22 +62,29 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
     (async () => {
       try {
-        const [ridesRaw, platformRaw, customPayRaw, defaultPayRaw] = await Promise.all([
+        const [ridesRaw, platformRaw, customPayRaw, defaultPayRaw, userIdRaw] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.rides),
           AsyncStorage.getItem(STORAGE_KEYS.platformRides),
           AsyncStorage.getItem(STORAGE_KEYS.customPayments),
           AsyncStorage.getItem(STORAGE_KEYS.defaultPayment),
+          AsyncStorage.getItem(STORAGE_KEYS.userId),
         ]);
         if (!mounted) return;
         if (ridesRaw) { try { setRides(JSON.parse(ridesRaw) as Ride[]); } catch {} }
         if (platformRaw) { try { setPlatformRides(JSON.parse(platformRaw) as Ride[]); } catch {} }
         if (customPayRaw) { try { setCustomPayments(JSON.parse(customPayRaw) as PaymentMethod[]); } catch {} }
         if (defaultPayRaw) setDefaultPaymentIdState(defaultPayRaw);
+        if (userIdRaw) setUserIdState(userIdRaw);
       } finally {
         if (mounted) setHydrated(true);
       }
     })();
     return () => { mounted = false; };
+  }, []);
+
+  const setUserId = useCallback(async (id: string) => {
+    setUserIdState(id);
+    await AsyncStorage.setItem(STORAGE_KEYS.userId, id);
   }, []);
 
   const persistRides = useCallback(async (next: Ride[]) => {
@@ -95,7 +106,20 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const nextPlatform = [ride, ...platformRides];
     setPlatformRides(nextPlatform);
     await persistPlatformRides(nextPlatform);
-  }, [rides, platformRides, persistRides, persistPlatformRides]);
+
+    // Sync to API
+    if (userId) {
+      api.createRide({
+        id: ride.id, userId,
+        pickupLabel: ride.pickup.label, pickupAddress: ride.pickup.address,
+        dropoffLabel: ride.dropoff.label, dropoffAddress: ride.dropoff.address,
+        tier: ride.tier, tierName: ride.tierName,
+        priceCents: ride.priceCents, distanceKm: ride.distanceKm,
+        durationMinutes: ride.durationMinutes, status: ride.status,
+        driver: ride.driver ?? null,
+      }).catch(() => {});
+    }
+  }, [rides, platformRides, persistRides, persistPlatformRides, userId]);
 
   const updateRide = useCallback(async (id: string, patch: Partial<Ride>) => {
     const nextRides = rides.map((r) => (r.id === id ? { ...r, ...patch } : r));
@@ -104,6 +128,15 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const nextPlatform = platformRides.map((r) => (r.id === id ? { ...r, ...patch } : r));
     setPlatformRides(nextPlatform);
     await persistPlatformRides(nextPlatform);
+
+    // Sync to API
+    const apiPatch: Record<string, unknown> = {};
+    if (patch.status) apiPatch["status"] = patch.status;
+    if (patch.driver !== undefined) apiPatch["driver"] = patch.driver;
+    if (patch.completedAt) apiPatch["completedAt"] = patch.completedAt;
+    if (Object.keys(apiPatch).length > 0) {
+      api.updateRide(id, apiPatch).catch(() => {});
+    }
   }, [rides, platformRides, persistRides, persistPlatformRides]);
 
   const cancelRide = useCallback(async (id: string) => {
@@ -114,6 +147,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const nextPlatform = platformRides.map((r) => (r.id === id ? { ...r, ...patch } : r));
     setPlatformRides(nextPlatform);
     await persistPlatformRides(nextPlatform);
+    api.updateRide(id, { status: "cancelled", completedAt: patch.completedAt }).catch(() => {});
   }, [rides, platformRides, persistRides, persistPlatformRides]);
 
   const setDefaultPayment = useCallback(async (id: string) => {
@@ -131,8 +165,14 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       const next = [...customPayments, newMethod];
       setCustomPayments(next);
       await persistCustomPayments(next);
+      if (userId) {
+        api.createPayment({
+          id: newMethod.id, userId, type: newMethod.type,
+          label: newMethod.label, detail: newMethod.detail, isDefault: false,
+        }).catch(() => {});
+      }
     },
-    [customPayments, persistCustomPayments],
+    [customPayments, persistCustomPayments, userId],
   );
 
   const removePaymentMethod = useCallback(
@@ -144,8 +184,11 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         setDefaultPaymentIdState("pix");
         await AsyncStorage.setItem(STORAGE_KEYS.defaultPayment, "pix");
       }
+      if (userId) {
+        api.deletePayment(id, userId).catch(() => {});
+      }
     },
-    [customPayments, defaultPaymentId, persistCustomPayments],
+    [customPayments, defaultPaymentId, persistCustomPayments, userId],
   );
 
   const getRide = useCallback((id: string) => rides.find((r) => r.id === id), [rides]);
@@ -160,12 +203,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<RideContextType>(
     () => ({
-      rides, platformRides, activeRide, payments, defaultPaymentId, hydrated,
-      addRide, updateRide, cancelRide, setDefaultPayment,
+      rides, platformRides, activeRide, payments, defaultPaymentId, hydrated, userId,
+      setUserId, addRide, updateRide, cancelRide, setDefaultPayment,
       addPaymentMethod, removePaymentMethod, getRide,
     }),
-    [rides, platformRides, activeRide, payments, defaultPaymentId, hydrated,
-      addRide, updateRide, cancelRide, setDefaultPayment,
+    [rides, platformRides, activeRide, payments, defaultPaymentId, hydrated, userId,
+      setUserId, addRide, updateRide, cancelRide, setDefaultPayment,
       addPaymentMethod, removePaymentMethod, getRide],
   );
 

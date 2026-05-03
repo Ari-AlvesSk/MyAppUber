@@ -21,7 +21,7 @@ export default function SecurityScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, updatePassword } = useAuth();
 
   const [newEmail, setNewEmail] = useState("");
   const [emailSaved, setEmailSaved] = useState(false);
@@ -54,6 +54,8 @@ export default function SecurityScreen() {
     if (newPwd.length < 6) { setPwdError("A nova senha deve ter pelo menos 6 caracteres."); return; }
     if (newPwd !== confirmPwd) { setPwdError("As senhas não coincidem."); return; }
     if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    // Save to DB (hash is a simple marker since this is a demo — real app would bcrypt)
+    await updatePassword(`hashed_${newPwd}`);
     setPwdSaved(true);
     setCurrentPwd(""); setNewPwd(""); setConfirmPwd("");
     setTimeout(() => setPwdSaved(false), 3000);

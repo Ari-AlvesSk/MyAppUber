@@ -21,6 +21,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { RideOptionRow } from "@/components/RideOptionRow";
 import { useLocation } from "@/context/LocationContext";
 import { useRides } from "@/context/RideContext";
+import { registerLocationPickerCallback } from "@/app/location-picker";
 import {
   RECENT_PLACES,
   RIDE_OPTIONS,
@@ -49,21 +50,30 @@ export default function BookingScreen() {
   const { addRide, defaultPaymentId, payments } = useRides();
   const { address, granted, loading: locLoading, requestPermission } = useLocation();
 
-  const pickup = useMemo<Place>(
-    () => ({
-      id: "current",
-      label: "Localização atual",
-      address: address && address !== "Permitir localização" && address !== "Buscando localização..."
-        ? address
-        : "Consolação, São Paulo",
-    }),
-    [address],
-  );
-
   const [destination, setDestination] = useState<Place | null>(() => findPlace(params.destinationId));
   const [query, setQuery] = useState("");
   const [selectedTier, setSelectedTier] = useState(RIDE_OPTIONS[0]!.tier);
   const [requesting, setRequesting] = useState(false);
+  const [customPickup, setCustomPickup] = useState<Pick<Place, "label" | "address"> | null>(null);
+
+  const pickup = useMemo<Place>(
+    () => ({
+      id: "current",
+      label: customPickup?.label ?? "Localização atual",
+      address: customPickup?.address ??
+        (address && address !== "Permitir localização" && address !== "Buscando localização..."
+          ? address
+          : "Consolação, São Paulo"),
+    }),
+    [address, customPickup],
+  );
+
+  // Register location picker callback once
+  useEffect(() => {
+    registerLocationPickerCallback((result) => {
+      setCustomPickup(result);
+    });
+  }, []);
 
   useEffect(() => {
     const p = findPlace(params.destinationId);
@@ -161,23 +171,19 @@ export default function BookingScreen() {
           <View style={{ flex: 1 }}>
             {/* Origem */}
             <Pressable
-              onPress={async () => {
-                if (!granted) {
-                  if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
-                  await requestPermission();
-                }
+              onPress={() => {
+                if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
+                router.push("/location-picker");
               }}
               style={styles.routeRow}
             >
               <View style={styles.pickupRow}>
                 <Text style={[styles.routeLabel, { color: colors.foreground }]}>{pickup.label}</Text>
-                {locLoading && <ActivityIndicator size="small" color={colors.accent} />}
-                {!locLoading && granted === false && (
-                  <View style={[styles.locBadge, { backgroundColor: colors.accent + "22", borderColor: colors.accent + "55" }]}>
-                    <Feather name="map-pin" size={11} color={colors.accent} />
-                    <Text style={[styles.locBadgeTxt, { color: colors.accent }]}>Permitir acesso</Text>
-                  </View>
-                )}
+                {locLoading && !customPickup && <ActivityIndicator size="small" color={colors.accent} />}
+                <View style={[styles.locBadge, { backgroundColor: colors.accent + "22", borderColor: colors.accent + "55" }]}>
+                  <Feather name="edit-2" size={10} color={colors.accent} />
+                  <Text style={[styles.locBadgeTxt, { color: colors.accent }]}>Mudar</Text>
+                </View>
               </View>
               <Text style={[styles.routeSub, { color: colors.mutedForeground }]} numberOfLines={1}>
                 {pickup.address}

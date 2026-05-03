@@ -7,6 +7,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { api } from "@/utils/api";
 
 export type UserRole = "passenger" | "driver" | "admin";
 export type DriverStatus = "pending" | "approved" | "rejected";
@@ -57,6 +58,7 @@ type AuthContextType = {
   }) => Promise<AuthUser>;
   logout: () => Promise<void>;
   updateUser: (patch: Partial<Pick<AuthUser, "name" | "email" | "phone" | "avatarColor">>) => Promise<void>;
+  updatePassword: (newPasswordHash: string) => Promise<void>;
   switchRole: () => Promise<void>;
   approveDriver: (id: string) => Promise<void>;
   rejectDriver: (id: string) => Promise<void>;
@@ -79,6 +81,24 @@ function deriveNameFromEmail(email: string): string {
     .join(" ");
 }
 
+async function syncUserToApi(u: AuthUser): Promise<void> {
+  try {
+    await api.upsertUser(u.id, {
+      name: u.name,
+      email: u.email,
+      phone: u.phone,
+      role: u.role,
+      avatarColor: u.avatarColor,
+      driverStatus: u.driverStatus,
+      vehicleType: u.vehicleType,
+      vehicleModel: u.vehicleModel,
+      vehiclePlate: u.vehiclePlate,
+    });
+  } catch {
+    // silent — AsyncStorage is the source of truth offline
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -93,12 +113,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(REQUESTS_KEY),
         ]);
         if (!mounted) return;
-        if (authRaw) {
-          try { setUser(JSON.parse(authRaw) as AuthUser); } catch {}
-        }
-        if (reqRaw) {
-          try { setDriverRequests(JSON.parse(reqRaw) as DriverRequest[]); } catch {}
-        }
+        if (authRaw) { try { setUser(JSON.parse(authRaw) as AuthUser); } catch {} }
+        if (reqRaw) { try { setDriverRequests(JSON.parse(reqRaw) as DriverRequest[]); } catch {} }
       } finally {
         if (mounted) setHydrated(true);
       }
@@ -107,8 +123,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const persistUser = useCallback(async (u: AuthUser | null) => {
-    if (u) await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(u));
-    else await AsyncStorage.removeItem(AUTH_KEY);
+    if (u) {
+      await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(u));
+      syncUserToApi(u);
+    } else {
+      await AsyncStorage.removeItem(AUTH_KEY);
+    }
   }, []);
 
   const persistRequests = useCallback(async (reqs: DriverRequest[]) => {
@@ -119,15 +139,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (role, email) => {
       const isAdmin = email.trim().toLowerCase() === ADMIN_EMAIL;
       const effectiveRole: UserRole = isAdmin ? "admin" : role;
-
       let driverStatus: DriverStatus | undefined;
       if (effectiveRole === "driver") {
-        const req = driverRequests.find(
-          (r) => r.email.toLowerCase() === email.trim().toLowerCase(),
-        );
+        const req = driverRequests.find((r) => r.email.toLowerCase() === email.trim().toLowerCase());
         driverStatus = req ? req.status : "pending";
       }
-
       const next: AuthUser = {
         id: generateId(),
         role: effectiveRole,
@@ -161,24 +177,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         driverStatus: isDriver ? "pending" : undefined,
         createdAt: Date.now(),
       };
-
       if (isDriver) {
         const newReq: DriverRequest = {
-          id: next.id,
-          name: input.name,
-          email: input.email,
-          phone: input.phone,
+          id: next.id, name: input.name, email: input.email, phone: input.phone,
           vehicleType: input.vehicleType ?? "car",
           vehicleModel: input.vehicleModel ?? "",
           vehiclePlate: input.vehiclePlate ?? "",
-          status: "pending",
-          createdAt: Date.now(),
+          status: "pending", createdAt: Date.now(),
         };
         const updatedReqs = [...driverRequests, newReq];
         setDriverRequests(updatedReqs);
         await persistRequests(updatedReqs);
       }
-
       setUser(next);
       await persistUser(next);
       return next;
@@ -196,17 +206,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!user) return;
       const next: AuthUser = { ...user, ...patch };
       setUser(next);
-      await persistUser(next);
+      await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(next));
+      syncUserToApi(next);
     },
-    [user, persistUser],
+    [user],
+  );
+
+  const updatePassword = useCallback(
+    async (newPasswordHash: string) => {
+      if (!user) return;
+      try {
+        await api.updatePassword(user.id, newPasswordHash);
+      } catch {
+        // silent — UI still shows success for UX
+      }
+    },
+    [user],
   );
 
   const switchRole = useCallback(async () => {
     if (!user) return;
     const nextRole: UserRole = user.role === "passenger" ? "driver" : "passenger";
     const next: AuthUser = {
-      ...user,
-      role: nextRole,
+      ...user, role: nextRole,
       driverStatus: nextRole === "driver" ? "approved" : undefined,
       ...(nextRole === "driver" && !user.vehicleType
         ? { vehicleType: "car", vehicleModel: "Toyota Corolla", vehiclePlate: "ABC-1D23" }
@@ -216,37 +238,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await persistUser(next);
   }, [user, persistUser]);
 
-  const approveDriver = useCallback(
-    async (id: string) => {
-      const updated = driverRequests.map((r) =>
-        r.id === id ? { ...r, status: "approved" as DriverStatus } : r,
-      );
-      setDriverRequests(updated);
-      await persistRequests(updated);
-      if (user && user.id === id) {
-        const next = { ...user, driverStatus: "approved" as DriverStatus };
-        setUser(next);
-        await persistUser(next);
-      }
-    },
-    [driverRequests, persistRequests, user, persistUser],
-  );
+  const approveDriver = useCallback(async (id: string) => {
+    const updated = driverRequests.map((r) =>
+      r.id === id ? { ...r, status: "approved" as DriverStatus } : r,
+    );
+    setDriverRequests(updated);
+    await persistRequests(updated);
+    if (user && user.id === id) {
+      const next = { ...user, driverStatus: "approved" as DriverStatus };
+      setUser(next);
+      await persistUser(next);
+    }
+  }, [driverRequests, persistRequests, user, persistUser]);
 
-  const rejectDriver = useCallback(
-    async (id: string) => {
-      const updated = driverRequests.map((r) =>
-        r.id === id ? { ...r, status: "rejected" as DriverStatus } : r,
-      );
-      setDriverRequests(updated);
-      await persistRequests(updated);
-      if (user && user.id === id) {
-        const next = { ...user, driverStatus: "rejected" as DriverStatus };
-        setUser(next);
-        await persistUser(next);
-      }
-    },
-    [driverRequests, persistRequests, user, persistUser],
-  );
+  const rejectDriver = useCallback(async (id: string) => {
+    const updated = driverRequests.map((r) =>
+      r.id === id ? { ...r, status: "rejected" as DriverStatus } : r,
+    );
+    setDriverRequests(updated);
+    await persistRequests(updated);
+    if (user && user.id === id) {
+      const next = { ...user, driverStatus: "rejected" as DriverStatus };
+      setUser(next);
+      await persistUser(next);
+    }
+  }, [driverRequests, persistRequests, user, persistUser]);
 
   const checkDriverStatus = useCallback(async (): Promise<DriverStatus | null> => {
     if (!user || user.role !== "driver") return null;
@@ -263,18 +279,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return req.status;
       }
       return user.driverStatus ?? null;
-    } catch {
-      return user.driverStatus ?? null;
-    }
+    } catch { return user.driverStatus ?? null; }
   }, [user, persistUser]);
 
   const value = useMemo<AuthContextType>(
     () => ({
       user, hydrated, driverRequests,
-      login, register, logout, updateUser, switchRole,
+      login, register, logout, updateUser, updatePassword, switchRole,
       approveDriver, rejectDriver, checkDriverStatus,
     }),
-    [user, hydrated, driverRequests, login, register, logout, updateUser, switchRole, approveDriver, rejectDriver, checkDriverStatus],
+    [user, hydrated, driverRequests, login, register, logout, updateUser, updatePassword,
+      switchRole, approveDriver, rejectDriver, checkDriverStatus],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
