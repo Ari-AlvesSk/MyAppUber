@@ -60,4 +60,13 @@ router.post("/admin-seed", async (req, res) => {
   try { const email = body.data.email.toLowerCase(); await UserModel.findByIdAndUpdate("admin", { _id: "admin", role: "admin", name: "Administrador", email, phone: "00000000000", cpf: "00000000000", passwordHash: `hashed_${body.data.password}`, usuario_ativo: true }, { upsert: true, new: true, setDefaultsOnInsert: true }); return res.json({ ok: true }); } catch (err) { req.log.error(err); return res.status(500).json({ error: "Internal error" }); }
 });
 
+router.post("/bulk-approve", async (req, res) => {
+  const body = z.object({ driverIds: z.array(z.string()).min(1) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "driverIds array required" });
+  try {
+    const result = await UserModel.updateMany({ _id: { $in: body.data.driverIds } }, { driverStatus: "approved" });
+    return res.json({ ok: true, modifiedCount: result.modifiedCount });
+  } catch (err) { req.log.error(err); return res.status(500).json({ error: "Internal error" }); }
+});
+
 export default router;
