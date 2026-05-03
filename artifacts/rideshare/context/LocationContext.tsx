@@ -17,11 +17,24 @@ type LocationState = {
   city: string;
   requestPermission: () => Promise<boolean>;
   refresh: () => Promise<void>;
+  distanceMeters: (a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) => number;
 };
 
 const LocationContext = createContext<LocationState | null>(null);
 const DEFAULT_COORDS = { latitude: -16.0028, longitude: -49.7903 };
 const DEFAULT_ADDRESS = "Paraúna, GO";
+
+function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
+  const R = 6371000;
+  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+  const dLng = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const lat1 = (a.latitude * Math.PI) / 180;
+  const lat2 = (b.latitude * Math.PI) / 180;
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
 
 export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [granted, setGranted] = useState<boolean | null>(null);
@@ -105,7 +118,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   }, [fetchLocation, setFallback]);
 
   const value = useMemo<LocationState>(
-    () => ({ granted, loading, coords, address, neighborhood, city, requestPermission, refresh }),
+    () => ({ granted, loading, coords, address, neighborhood, city, requestPermission, refresh, distanceMeters }),
     [granted, loading, coords, address, neighborhood, city, requestPermission, refresh],
   );
 
