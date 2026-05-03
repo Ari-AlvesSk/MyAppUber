@@ -69,7 +69,8 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | null>(null);
 const AUTH_KEY = "rideshare:auth:v1";
 const REQUESTS_KEY = "rideshare:driver_requests:v1";
-const ADMIN_EMAIL = "admin@rideshare.com";
+const ADMIN_EMAIL = "administradorparaunamobi@bussines.com";
+const ADMIN_PASSWORD = "paraunamobi20268118";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -135,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback<AuthContextType["login"]>(async (role, email, password) => {
     const emailNorm = normalizeEmail(email);
     if (emailNorm === ADMIN_EMAIL) {
+      if (password !== ADMIN_PASSWORD) throw new Error("Senha incorreta.");
       const admin: AuthUser = {
         id: "admin",
         role: "admin",
