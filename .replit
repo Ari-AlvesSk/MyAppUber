@@ -30,3 +30,9 @@ externalPort = 8081
 [[ports]]
 localPort = 20619
 externalPort = 80
+
+[userenv]
+
+[userenv.shared]
+MONGODB_URI = "mongodb://aplicativoariuber:arineto811809@ac-ebpadlc-shard-00-00.8f4ec1q.mongodb.net:27017,ac-ebpadlc-shard-00-01.8f4ec1q.mongodb.net:27017,ac-ebpadlc-shard-00-02.8f4ec1q.mongodb.net:27017/?ssl=true&replicaSet=atlas-g2q7lm-shard-0&authSource=admin&appName=Cluster0"
+MONGODB_DB = "DbSistemaCaronaParaunaMobi"

@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
-import { db, paymentsTable } from "@workspace/db";
+import { PaymentModel } from "@workspace/db";
 import { z } from "zod";
 
 const router = Router();
@@ -11,10 +10,7 @@ router.get("/", async (req, res) => {
   if (!userId) return res.status(400).json({ error: "userId required" });
 
   try {
-    const rows = await db
-      .select()
-      .from(paymentsTable)
-      .where(eq(paymentsTable.userId, userId));
+    const rows = await PaymentModel.find({ userId }).lean();
     return res.json(rows);
   } catch (err) {
     req.log.error(err);
@@ -37,13 +33,18 @@ router.post("/", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error });
 
   try {
-    await db
-      .insert(paymentsTable)
-      .values({ ...parsed.data, isDefault: parsed.data.isDefault ?? false })
-      .onConflictDoUpdate({
-        target: paymentsTable.id,
-        set: { label: parsed.data.label, detail: parsed.data.detail },
-      });
+    await PaymentModel.findByIdAndUpdate(
+      parsed.data.id,
+      {
+        _id: parsed.data.id,
+        userId: parsed.data.userId,
+        type: parsed.data.type,
+        label: parsed.data.label,
+        detail: parsed.data.detail,
+        isDefault: parsed.data.isDefault ?? false,
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
     return res.json({ ok: true });
   } catch (err) {
     req.log.error(err);
@@ -51,15 +52,13 @@ router.post("/", async (req, res) => {
   }
 });
 
-// DELETE /api/payments/:id
+// DELETE /api/payments/:id?userId=xxx
 router.delete("/:id", async (req, res) => {
   const userId = req.query["userId"] as string | undefined;
   if (!userId) return res.status(400).json({ error: "userId required" });
 
   try {
-    await db
-      .delete(paymentsTable)
-      .where(and(eq(paymentsTable.id, req.params.id), eq(paymentsTable.userId, userId)));
+    await PaymentModel.findOneAndDelete({ _id: req.params.id, userId });
     return res.json({ ok: true });
   } catch (err) {
     req.log.error(err);

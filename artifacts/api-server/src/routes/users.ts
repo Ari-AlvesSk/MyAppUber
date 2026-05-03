@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { UserModel } from "@workspace/db";
 import { z } from "zod";
 
 const router = Router();
@@ -8,13 +7,9 @@ const router = Router();
 // GET /api/users/:id
 router.get("/:id", async (req, res) => {
   try {
-    const user = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.id, req.params.id))
-      .limit(1);
-    if (!user[0]) return res.status(404).json({ error: "User not found" });
-    const { passwordHash: _, ...safe } = user[0];
+    const user = await UserModel.findById(req.params.id).lean();
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const { passwordHash: _, ...safe } = user as unknown as Record<string, unknown>;
     return res.json(safe);
   } catch (err) {
     req.log.error(err);
@@ -22,7 +17,6 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// PUT /api/users/:id — upsert user (called on login/register and profile edits)
 const upsertSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
@@ -35,19 +29,17 @@ const upsertSchema = z.object({
   vehiclePlate: z.string().optional(),
 });
 
+// PUT /api/users/:id
 router.put("/:id", async (req, res) => {
   const parsed = upsertSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error });
 
   try {
-    const now = new Date();
-    await db
-      .insert(usersTable)
-      .values({ id: req.params.id, ...parsed.data, createdAt: now, updatedAt: now })
-      .onConflictDoUpdate({
-        target: usersTable.id,
-        set: { ...parsed.data, updatedAt: now },
-      });
+    await UserModel.findByIdAndUpdate(
+      req.params.id,
+      { _id: req.params.id, ...parsed.data },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
     return res.json({ ok: true });
   } catch (err) {
     req.log.error(err);
@@ -63,10 +55,7 @@ router.patch("/:id/password", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error });
 
   try {
-    await db
-      .update(usersTable)
-      .set({ passwordHash: parsed.data.passwordHash, updatedAt: new Date() })
-      .where(eq(usersTable.id, req.params.id));
+    await UserModel.findByIdAndUpdate(req.params.id, { passwordHash: parsed.data.passwordHash });
     return res.json({ ok: true });
   } catch (err) {
     req.log.error(err);

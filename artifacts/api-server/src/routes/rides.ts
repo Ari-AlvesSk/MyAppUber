@@ -1,22 +1,13 @@
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
-import { db, ridesTable } from "@workspace/db";
+import { RideModel } from "@workspace/db";
 import { z } from "zod";
 
 const router = Router();
 
-// GET /api/rides?userId=xxx
-router.get("/", async (req, res) => {
-  const userId = req.query["userId"] as string | undefined;
-  if (!userId) return res.status(400).json({ error: "userId required" });
-
+// GET /api/rides/all — admin: all rides (register before /:id)
+router.get("/all", async (req, res) => {
   try {
-    const rows = await db
-      .select()
-      .from(ridesTable)
-      .where(eq(ridesTable.userId, userId))
-      .orderBy(desc(ridesTable.createdAt))
-      .limit(50);
+    const rows = await RideModel.find().sort({ createdAt: -1 }).limit(200).lean();
     return res.json(rows);
   } catch (err) {
     req.log.error(err);
@@ -24,14 +15,13 @@ router.get("/", async (req, res) => {
   }
 });
 
-// GET /api/rides/all — admin: all platform rides
-router.get("/all", async (req, res) => {
+// GET /api/rides?userId=xxx
+router.get("/", async (req, res) => {
+  const userId = req.query["userId"] as string | undefined;
+  if (!userId) return res.status(400).json({ error: "userId required" });
+
   try {
-    const rows = await db
-      .select()
-      .from(ridesTable)
-      .orderBy(desc(ridesTable.createdAt))
-      .limit(200);
+    const rows = await RideModel.find({ userId }).sort({ createdAt: -1 }).limit(50).lean();
     return res.json(rows);
   } catch (err) {
     req.log.error(err);
@@ -61,16 +51,25 @@ router.post("/", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error });
 
   try {
-    await db
-      .insert(ridesTable)
-      .values({
-        ...parsed.data,
+    await RideModel.findByIdAndUpdate(
+      parsed.data.id,
+      {
+        _id: parsed.data.id,
+        userId: parsed.data.userId,
+        pickupLabel: parsed.data.pickupLabel,
+        pickupAddress: parsed.data.pickupAddress,
+        dropoffLabel: parsed.data.dropoffLabel,
+        dropoffAddress: parsed.data.dropoffAddress,
+        tier: parsed.data.tier,
+        tierName: parsed.data.tierName,
+        priceCents: parsed.data.priceCents,
+        distanceKm: parsed.data.distanceKm,
+        durationMinutes: parsed.data.durationMinutes,
         status: parsed.data.status ?? "searching",
         driver: (parsed.data.driver as Record<string, unknown>) ?? null,
-        createdAt: new Date(),
-        completedAt: null,
-      })
-      .onConflictDoNothing();
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
     return res.json({ ok: true });
   } catch (err) {
     req.log.error(err);
@@ -96,7 +95,7 @@ router.patch("/:id", async (req, res) => {
     if (parsed.data.completedAt !== undefined)
       set["completedAt"] = new Date(parsed.data.completedAt);
 
-    await db.update(ridesTable).set(set).where(eq(ridesTable.id, req.params.id));
+    await RideModel.findByIdAndUpdate(req.params.id, { $set: set });
     return res.json({ ok: true });
   } catch (err) {
     req.log.error(err);

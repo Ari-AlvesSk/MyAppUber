@@ -11,11 +11,22 @@ pnpm workspace monorepo using TypeScript. Expo mobile rideshare app (pt-BR) with
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM (`lib/db`)
-- **Validation**: Zod (routes use `zod`, schema lib uses `zod/v4`), `drizzle-zod`
+- **Database**: MongoDB Atlas via Mongoose (`lib/db`) — DB: `DbSistemaCaronaParaunaMobi`
+- **Validation**: Zod
 - **API codegen**: Orval (from OpenAPI spec in `lib/api-spec`)
 - **Build**: esbuild
 - **Mobile**: Expo Router (React Native + web)
+
+## MongoDB Collections
+
+- `usuarios` — user profiles (IUser model)
+- `corridas` — ride history (IRide model)
+- `pagamentos` — payment methods (IPayment model)
+
+## Environment Variables
+
+- `MONGODB_URI` — MongoDB Atlas connection string (shared env)
+- `MONGODB_DB` — Database name: `DbSistemaCaronaParaunaMobi` (shared env)
 
 ## Key Commands
 
