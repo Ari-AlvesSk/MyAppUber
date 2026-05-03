@@ -17,6 +17,7 @@ export type AuthUser = {
   name: string;
   email: string;
   phone: string;
+  avatarColor?: string;
   vehicleType?: "moto" | "car";
   vehicleModel?: string;
   vehiclePlate?: string;
@@ -55,6 +56,7 @@ type AuthContextType = {
     vehiclePlate?: string;
   }) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  updateUser: (patch: Partial<Pick<AuthUser, "name" | "email" | "phone" | "avatarColor">>) => Promise<void>;
   switchRole: () => Promise<void>;
   approveDriver: (id: string) => Promise<void>;
   rejectDriver: (id: string) => Promise<void>;
@@ -92,22 +94,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ]);
         if (!mounted) return;
         if (authRaw) {
-          try {
-            setUser(JSON.parse(authRaw) as AuthUser);
-          } catch {}
+          try { setUser(JSON.parse(authRaw) as AuthUser); } catch {}
         }
         if (reqRaw) {
-          try {
-            setDriverRequests(JSON.parse(reqRaw) as DriverRequest[]);
-          } catch {}
+          try { setDriverRequests(JSON.parse(reqRaw) as DriverRequest[]); } catch {}
         }
       } finally {
         if (mounted) setHydrated(true);
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
   const persistUser = useCallback(async (u: AuthUser | null) => {
@@ -125,15 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const effectiveRole: UserRole = isAdmin ? "admin" : role;
 
       let driverStatus: DriverStatus | undefined;
-      const requests =
-        driverRequests.length > 0
-          ? driverRequests
-          : (() => {
-              return driverRequests;
-            })();
-
       if (effectiveRole === "driver") {
-        const req = requests.find(
+        const req = driverRequests.find(
           (r) => r.email.toLowerCase() === email.trim().toLowerCase(),
         );
         driverStatus = req ? req.status : "pending";
@@ -146,12 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: email.trim(),
         phone: "+55 11 90000-0000",
         ...(effectiveRole === "driver"
-          ? {
-              vehicleType: "car",
-              vehicleModel: "Toyota Corolla",
-              vehiclePlate: "ABC-1D23",
-              driverStatus,
-            }
+          ? { vehicleType: "car", vehicleModel: "Toyota Corolla", vehiclePlate: "ABC-1D23", driverStatus }
           : {}),
         createdAt: Date.now(),
       };
@@ -207,20 +191,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await persistUser(null);
   }, [persistUser]);
 
+  const updateUser = useCallback(
+    async (patch: Partial<Pick<AuthUser, "name" | "email" | "phone" | "avatarColor">>) => {
+      if (!user) return;
+      const next: AuthUser = { ...user, ...patch };
+      setUser(next);
+      await persistUser(next);
+    },
+    [user, persistUser],
+  );
+
   const switchRole = useCallback(async () => {
     if (!user) return;
-    const nextRole: UserRole =
-      user.role === "passenger" ? "driver" : "passenger";
+    const nextRole: UserRole = user.role === "passenger" ? "driver" : "passenger";
     const next: AuthUser = {
       ...user,
       role: nextRole,
       driverStatus: nextRole === "driver" ? "approved" : undefined,
       ...(nextRole === "driver" && !user.vehicleType
-        ? {
-            vehicleType: "car",
-            vehicleModel: "Toyota Corolla",
-            vehiclePlate: "ABC-1D23",
-          }
+        ? { vehicleType: "car", vehicleModel: "Toyota Corolla", vehiclePlate: "ABC-1D23" }
         : {}),
     };
     setUser(next);
@@ -234,7 +223,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
       setDriverRequests(updated);
       await persistRequests(updated);
-
       if (user && user.id === id) {
         const next = { ...user, driverStatus: "approved" as DriverStatus };
         setUser(next);
@@ -251,7 +239,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
       setDriverRequests(updated);
       await persistRequests(updated);
-
       if (user && user.id === id) {
         const next = { ...user, driverStatus: "rejected" as DriverStatus };
         setUser(next);
@@ -267,9 +254,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!reqRaw) return user.driverStatus ?? null;
     try {
       const reqs = JSON.parse(reqRaw) as DriverRequest[];
-      const req = reqs.find(
-        (r) => r.email.toLowerCase() === user.email.toLowerCase(),
-      );
+      const req = reqs.find((r) => r.email.toLowerCase() === user.email.toLowerCase());
       if (req && req.status !== user.driverStatus) {
         const next = { ...user, driverStatus: req.status };
         setUser(next);
@@ -285,29 +270,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AuthContextType>(
     () => ({
-      user,
-      hydrated,
-      driverRequests,
-      login,
-      register,
-      logout,
-      switchRole,
-      approveDriver,
-      rejectDriver,
-      checkDriverStatus,
+      user, hydrated, driverRequests,
+      login, register, logout, updateUser, switchRole,
+      approveDriver, rejectDriver, checkDriverStatus,
     }),
-    [
-      user,
-      hydrated,
-      driverRequests,
-      login,
-      register,
-      logout,
-      switchRole,
-      approveDriver,
-      rejectDriver,
-      checkDriverStatus,
-    ],
+    [user, hydrated, driverRequests, login, register, logout, updateUser, switchRole, approveDriver, rejectDriver, checkDriverStatus],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

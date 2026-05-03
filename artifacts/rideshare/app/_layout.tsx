@@ -43,14 +43,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     }
 
     if (inAuthScreens) {
-      if (user.role === "admin") {
-        router.replace("/admin");
-      } else if (user.role === "driver") {
-        if (user.driverStatus === "pending" || user.driverStatus === "rejected") {
+      if (user.role === "admin") router.replace("/admin");
+      else if (user.role === "driver") {
+        if (user.driverStatus === "pending" || user.driverStatus === "rejected")
           router.replace("/(driver)/pending");
-        } else {
-          router.replace("/(driver)");
-        }
+        else router.replace("/(driver)");
       } else {
         router.replace("/(tabs)");
       }
@@ -65,28 +62,14 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (user.role === "driver") {
       const needsPending =
         user.driverStatus === "pending" || user.driverStatus === "rejected";
-      if (needsPending && !inPending) {
-        router.replace("/(driver)/pending");
-        return;
-      }
-      if (!needsPending && inPending) {
-        router.replace("/(driver)");
-        return;
-      }
-      if (inPassengerTabs) {
-        router.replace("/(driver)");
-        return;
-      }
-      if (inAdmin) {
-        router.replace("/(driver)");
-        return;
-      }
+      if (needsPending && !inPending) { router.replace("/(driver)/pending"); return; }
+      if (!needsPending && inPending) { router.replace("/(driver)"); return; }
+      if (inPassengerTabs) { router.replace("/(driver)"); return; }
+      if (inAdmin) { router.replace("/(driver)"); return; }
     }
 
     if (user.role === "passenger") {
-      if (inDriverArea || inAdmin) {
-        router.replace("/(tabs)");
-      }
+      if (inDriverArea || inAdmin) router.replace("/(tabs)");
     }
   }, [user, hydrated, segments, router]);
 
@@ -94,34 +77,23 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 function RootLayoutNav() {
+  const slideRight = { animation: "slide_from_right" as const };
   return (
     <Stack screenOptions={{ headerBackTitle: "Voltar" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(driver)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="admin"
-        options={{ headerShown: false, animation: "fade" }}
-      />
-      <Stack.Screen
-        name="login"
-        options={{ headerShown: false, animation: "fade" }}
-      />
-      <Stack.Screen
-        name="register"
-        options={{ headerShown: false, animation: "slide_from_right" }}
-      />
-      <Stack.Screen
-        name="booking"
-        options={{
-          headerShown: false,
-          presentation: "modal",
-          animation: "slide_from_bottom",
-        }}
-      />
-      <Stack.Screen
-        name="ride/[id]"
-        options={{ headerShown: false, animation: "fade" }}
-      />
+      <Stack.Screen name="admin" options={{ headerShown: false, animation: "fade" }} />
+      <Stack.Screen name="login" options={{ headerShown: false, animation: "fade" }} />
+      <Stack.Screen name="register" options={{ headerShown: false, ...slideRight }} />
+      <Stack.Screen name="booking" options={{ headerShown: false, presentation: "modal", animation: "slide_from_bottom" }} />
+      <Stack.Screen name="ride/[id]" options={{ headerShown: false, animation: "fade" }} />
+      <Stack.Screen name="profile-edit" options={{ headerShown: false, ...slideRight }} />
+      <Stack.Screen name="payment-methods" options={{ headerShown: false, ...slideRight }} />
+      <Stack.Screen name="promos" options={{ headerShown: false, ...slideRight }} />
+      <Stack.Screen name="security" options={{ headerShown: false, ...slideRight }} />
+      <Stack.Screen name="notifications" options={{ headerShown: false, ...slideRight }} />
+      <Stack.Screen name="help" options={{ headerShown: false, ...slideRight }} />
+      <Stack.Screen name="legal" options={{ headerShown: false, ...slideRight }} />
     </Stack>
   );
 }
@@ -135,9 +107,7 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-    }
+    if (fontsLoaded || fontError) SplashScreen.hideAsync();
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) return null;
