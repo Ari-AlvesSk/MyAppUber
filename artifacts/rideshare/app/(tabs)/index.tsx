@@ -1,7 +1,9 @@
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useMemo } from "react";
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -14,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MapCanvas } from "@/components/MapCanvas";
 import { PlaceRow } from "@/components/PlaceRow";
 import { useAuth } from "@/context/AuthContext";
+import { useLocation } from "@/context/LocationContext";
 import { useRides } from "@/context/RideContext";
 import { RECENT_PLACES, SAVED_PLACES, SUGGESTED_PLACES } from "@/data/mock";
 import { useColors } from "@/hooks/useColors";
@@ -22,8 +25,9 @@ export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { activeRide } = useRides();
+  const { activeRide, rides } = useRides();
   const { user } = useAuth();
+  const { address, granted, loading: locLoading, requestPermission } = useLocation();
 
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 67) : insets.top;
@@ -38,57 +42,71 @@ export default function HomeScreen() {
   }, []);
 
   const firstName = (user?.name ?? "Passageiro").split(" ")[0];
-  const completedCount = useRides().rides.filter(
-    (r) => r.status === "completed",
-  ).length;
+  const avatarColor = user?.avatarColor ?? colors.foreground;
+  const completedCount = rides.filter((r) => r.status === "completed").length;
+
+  const handleLocationPress = async () => {
+    if (!granted) {
+      if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
+      await requestPermission();
+    }
+  };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <ScrollView
-        contentContainerStyle={{
-          paddingTop: topPad,
-          paddingBottom: bottomPad,
-        }}
+        contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
       >
         {/* Cabeçalho */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.greet, { color: colors.mutedForeground }]}>
-              {greeting},
-            </Text>
-            <Text style={[styles.name, { color: colors.foreground }]}>
-              {firstName}
-            </Text>
+            <Text style={[styles.greet, { color: colors.mutedForeground }]}>{greeting},</Text>
+            <Text style={[styles.name, { color: colors.foreground }]}>{firstName}</Text>
           </View>
-          <View
-            style={[styles.avatar, { backgroundColor: colors.foreground }]}
+          <Pressable
+            onPress={() => router.push("/(tabs)/account")}
+            style={[styles.avatar, { backgroundColor: avatarColor }]}
           >
-            <Text style={[styles.avatarTxt, { color: colors.background }]}>
-              {firstName.charAt(0)}
+            <Text style={[styles.avatarTxt, { color: avatarColor === colors.foreground ? colors.background : "#fff" }]}>
+              {firstName.charAt(0).toUpperCase()}
             </Text>
-          </View>
+          </Pressable>
         </View>
 
         {/* Mapa */}
-        <View
-          style={[
-            styles.mapWrap,
-            { borderColor: colors.border, backgroundColor: colors.card },
-          ]}
-        >
+        <View style={[styles.mapWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <MapCanvas height={220} showRoute />
-          <View
+
+          {/* Badge de localização real */}
+          <Pressable
+            onPress={handleLocationPress}
             style={[styles.mapOverlay, { backgroundColor: colors.background }]}
-            pointerEvents="none"
           >
-            <Feather name="map-pin" size={14} color={colors.accent} />
+            {locLoading ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <Feather
+                name="map-pin"
+                size={14}
+                color={granted === false ? colors.mutedForeground : colors.accent}
+              />
+            )}
             <Text
-              style={[styles.mapOverlayTxt, { color: colors.foreground }]}
+              style={[
+                styles.mapOverlayTxt,
+                { color: granted === false ? colors.mutedForeground : colors.foreground },
+              ]}
+              numberOfLines={1}
             >
-              São Paulo, SP
+              {locLoading ? "Localizando..." : address}
             </Text>
-          </View>
+            {granted === false && (
+              <View style={[styles.permBadge, { backgroundColor: colors.accent }]}>
+                <Text style={[styles.permTxt, { color: colors.accentForeground }]}>Permitir</Text>
+              </View>
+            )}
+          </Pressable>
         </View>
 
         {/* Buscar destino */}
@@ -96,27 +114,16 @@ export default function HomeScreen() {
           onPress={() => router.push("/booking")}
           style={({ pressed }) => [
             styles.searchBar,
-            {
-              backgroundColor: colors.foreground,
-              opacity: pressed ? 0.85 : 1,
-            },
+            { backgroundColor: colors.foreground, opacity: pressed ? 0.85 : 1 },
           ]}
         >
-          <View
-            style={[styles.searchIcon, { backgroundColor: colors.accent }]}
-          >
+          <View style={[styles.searchIcon, { backgroundColor: colors.accent }]}>
             <Feather name="search" size={16} color={colors.accentForeground} />
           </View>
-          <Text style={[styles.searchTxt, { color: colors.background }]}>
-            Para onde?
-          </Text>
-          <View
-            style={[styles.nowChip, { backgroundColor: colors.background }]}
-          >
+          <Text style={[styles.searchTxt, { color: colors.background }]}>Para onde?</Text>
+          <View style={[styles.nowChip, { backgroundColor: colors.background }]}>
             <Feather name="clock" size={12} color={colors.foreground} />
-            <Text style={[styles.nowTxt, { color: colors.foreground }]}>
-              Agora
-            </Text>
+            <Text style={[styles.nowTxt, { color: colors.foreground }]}>Agora</Text>
           </View>
         </Pressable>
 
@@ -126,98 +133,49 @@ export default function HomeScreen() {
             onPress={() => router.push(`/ride/${activeRide.id}`)}
             style={({ pressed }) => [
               styles.activeBanner,
-              {
-                backgroundColor: colors.accent,
-                opacity: pressed ? 0.9 : 1,
-              },
+              { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1 },
             ]}
           >
             <View style={styles.activeLeft}>
-              <View
-                style={[
-                  styles.dot,
-                  { backgroundColor: colors.accentForeground },
-                ]}
-              />
+              <View style={[styles.dot, { backgroundColor: colors.accentForeground }]} />
               <View>
-                <Text
-                  style={[
-                    styles.activeTitle,
-                    { color: colors.accentForeground },
-                  ]}
-                >
+                <Text style={[styles.activeTitle, { color: colors.accentForeground }]}>
                   Corrida em andamento
                 </Text>
                 <Text
-                  style={[
-                    styles.activeSub,
-                    { color: colors.accentForeground, opacity: 0.7 },
-                  ]}
+                  style={[styles.activeSub, { color: colors.accentForeground, opacity: 0.7 }]}
                   numberOfLines={1}
                 >
                   Para {activeRide.dropoff.label}
                 </Text>
               </View>
             </View>
-            <Feather
-              name="chevron-right"
-              size={22}
-              color={colors.accentForeground}
-            />
+            <Feather name="chevron-right" size={22} color={colors.accentForeground} />
           </Pressable>
         )}
 
         {/* Locais salvos */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            Locais salvos
-          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Locais salvos</Text>
           <View style={styles.savedGrid}>
             {SAVED_PLACES.map((p) => (
               <Pressable
                 key={p.id}
-                onPress={() =>
-                  router.push({
-                    pathname: "/booking",
-                    params: { destinationId: p.id },
-                  })
-                }
+                onPress={() => router.push({ pathname: "/booking", params: { destinationId: p.id } })}
                 style={({ pressed }) => [
                   styles.savedCard,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                    opacity: pressed ? 0.7 : 1,
-                  },
+                  { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
                 ]}
               >
-                <View
-                  style={[
-                    styles.savedIcon,
-                    { backgroundColor: colors.background },
-                  ]}
-                >
+                <View style={[styles.savedIcon, { backgroundColor: colors.background }]}>
                   <Feather
-                    name={
-                      (p.icon as keyof typeof Feather.glyphMap | undefined) ??
-                      "map-pin"
-                    }
+                    name={(p.icon as keyof typeof Feather.glyphMap | undefined) ?? "map-pin"}
                     size={18}
                     color={colors.foreground}
                   />
                 </View>
-                <Text
-                  style={[styles.savedLabel, { color: colors.foreground }]}
-                >
-                  {p.label}
-                </Text>
-                <Text
-                  style={[
-                    styles.savedAddr,
-                    { color: colors.mutedForeground },
-                  ]}
-                  numberOfLines={1}
-                >
+                <Text style={[styles.savedLabel, { color: colors.foreground }]}>{p.label}</Text>
+                <Text style={[styles.savedAddr, { color: colors.mutedForeground }]} numberOfLines={1}>
                   {p.address.split("–")[0]?.trim()}
                 </Text>
               </Pressable>
@@ -227,76 +185,35 @@ export default function HomeScreen() {
 
         {/* Recentes */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            Recentes
-          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recentes</Text>
           {RECENT_PLACES.slice(0, 4).map((p) => (
             <PlaceRow
               key={p.id}
               place={p}
               iconName="clock"
-              onPress={() =>
-                router.push({
-                  pathname: "/booking",
-                  params: { destinationId: p.id },
-                })
-              }
+              onPress={() => router.push({ pathname: "/booking", params: { destinationId: p.id } })}
             />
           ))}
         </View>
 
         {/* Sugestões */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            Perto de você
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.hScroll}
-          >
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Perto de você</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
             {SUGGESTED_PLACES.map((p) => (
               <Pressable
                 key={p.id}
-                onPress={() =>
-                  router.push({
-                    pathname: "/booking",
-                    params: { destinationId: p.id },
-                  })
-                }
+                onPress={() => router.push({ pathname: "/booking", params: { destinationId: p.id } })}
                 style={({ pressed }) => [
                   styles.suggestCard,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                    opacity: pressed ? 0.7 : 1,
-                  },
+                  { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
                 ]}
               >
-                <View
-                  style={[
-                    styles.suggestIcon,
-                    { backgroundColor: colors.accent },
-                  ]}
-                >
-                  <Feather
-                    name="map-pin"
-                    size={16}
-                    color={colors.accentForeground}
-                  />
+                <View style={[styles.suggestIcon, { backgroundColor: colors.accent }]}>
+                  <Feather name="map-pin" size={16} color={colors.accentForeground} />
                 </View>
-                <Text
-                  style={[styles.suggestLabel, { color: colors.foreground }]}
-                >
-                  {p.label}
-                </Text>
-                <Text
-                  style={[
-                    styles.suggestAddr,
-                    { color: colors.mutedForeground },
-                  ]}
-                  numberOfLines={2}
-                >
+                <Text style={[styles.suggestLabel, { color: colors.foreground }]}>{p.label}</Text>
+                <Text style={[styles.suggestAddr, { color: colors.mutedForeground }]} numberOfLines={2}>
                   {p.address}
                 </Text>
               </Pressable>
@@ -305,47 +222,20 @@ export default function HomeScreen() {
         </View>
 
         {/* Estatísticas */}
-        <View
-          style={[
-            styles.statCard,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
+        <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.foreground }]}>
-              {completedCount}
-            </Text>
-            <Text
-              style={[styles.statLabel, { color: colors.mutedForeground }]}
-            >
-              Corridas
-            </Text>
+            <Text style={[styles.statValue, { color: colors.foreground }]}>{completedCount}</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Corridas</Text>
           </View>
-          <View
-            style={[styles.divider, { backgroundColor: colors.border }]}
-          />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.foreground }]}>
-              4,96
-            </Text>
-            <Text
-              style={[styles.statLabel, { color: colors.mutedForeground }]}
-            >
-              Avaliação
-            </Text>
+            <Text style={[styles.statValue, { color: colors.foreground }]}>4,96</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Avaliação</Text>
           </View>
-          <View
-            style={[styles.divider, { backgroundColor: colors.border }]}
-          />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.accent }]}>
-              Ouro
-            </Text>
-            <Text
-              style={[styles.statLabel, { color: colors.mutedForeground }]}
-            >
-              Nível
-            </Text>
+            <Text style={[styles.statValue, { color: colors.accent }]}>Ouro</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Nível</Text>
           </View>
         </View>
       </ScrollView>
@@ -356,149 +246,69 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
   greet: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  name: {
-    fontSize: 28,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.5,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  name: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   avatarTxt: { fontSize: 16, fontFamily: "Inter_700Bold" },
   mapWrap: {
-    marginHorizontal: 20,
-    borderRadius: 22,
-    overflow: "hidden",
-    borderWidth: 1,
-    position: "relative",
+    marginHorizontal: 20, borderRadius: 22, overflow: "hidden",
+    borderWidth: 1, position: "relative",
   },
   mapOverlay: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    position: "absolute", top: 12, left: 12,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999,
+    maxWidth: "80%",
   },
-  mapOverlayTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  mapOverlayTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold", flexShrink: 1 },
+  permBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+  permTxt: { fontSize: 10, fontFamily: "Inter_700Bold" },
   searchBar: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    height: 60,
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    gap: 12,
+    marginHorizontal: 20, marginTop: 16,
+    flexDirection: "row", alignItems: "center",
+    height: 60, borderRadius: 18, paddingHorizontal: 12, gap: 12,
   },
-  searchIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  searchIcon: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   searchTxt: { flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold" },
   nowChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999,
   },
   nowTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   activeBanner: {
-    marginHorizontal: 20,
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderRadius: 18,
+    marginHorizontal: 20, marginTop: 14,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    padding: 16, borderRadius: 18,
   },
-  activeLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
+  activeLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   activeTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
   activeSub: { fontSize: 13, fontFamily: "Inter_500Medium", marginTop: 2 },
   section: { marginTop: 28, paddingHorizontal: 20 },
   sectionTitle: {
-    fontSize: 13,
-    fontFamily: "Inter_700Bold",
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-    marginBottom: 10,
+    fontSize: 13, fontFamily: "Inter_700Bold",
+    textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 10,
   },
   savedGrid: { flexDirection: "row", gap: 12 },
-  savedCard: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1,
-    gap: 10,
-  },
-  savedIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  savedCard: { flex: 1, padding: 16, borderRadius: 18, borderWidth: 1, gap: 10 },
+  savedIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   savedLabel: { fontSize: 16, fontFamily: "Inter_700Bold" },
   savedAddr: { fontSize: 12, fontFamily: "Inter_400Regular" },
   hScroll: { gap: 12, paddingRight: 20 },
-  suggestCard: {
-    width: 180,
-    padding: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    gap: 10,
-  },
-  suggestIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  suggestCard: { width: 180, padding: 14, borderRadius: 18, borderWidth: 1, gap: 10 },
+  suggestIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   suggestLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   suggestAddr: { fontSize: 12, fontFamily: "Inter_400Regular", minHeight: 32 },
   statCard: {
-    marginTop: 28,
-    marginHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 18,
-    borderRadius: 22,
-    borderWidth: 1,
+    marginTop: 28, marginHorizontal: 20,
+    flexDirection: "row", alignItems: "center",
+    padding: 18, borderRadius: 22, borderWidth: 1,
   },
   statItem: { flex: 1, alignItems: "center", gap: 4 },
   statValue: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  statLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_500Medium",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
+  statLabel: { fontSize: 11, fontFamily: "Inter_500Medium", textTransform: "uppercase", letterSpacing: 0.6 },
   divider: { width: 1, height: 36 },
 });
