@@ -27,16 +27,16 @@ router.post("/login", async (req, res) => {
   } catch (err) { req.log.error(err); return res.status(500).json({ error: "Erro interno. Tente novamente." }); }
 });
 
-router.get("/:id", async (req, res) => {
-  try { const user = await UserModel.findById(req.params.id).lean(); if (!user) return res.status(404).json({ error: "User not found" }); return res.json(normalizeUser(user as unknown as Record<string, unknown>)); } catch (err) { req.log.error(err); return res.status(500).json({ error: "Internal error" }); }
-});
-
 router.get("/lookup/check", async (req, res) => {
   const email = String(req.query.email ?? "").trim().toLowerCase();
   const phone = String(req.query.phone ?? "").trim();
   const cpf = String(req.query.cpf ?? "").trim();
   if (!email && !phone && !cpf) return res.status(400).json({ error: "email, phone or cpf required" });
   try { const conditions: Record<string, string>[] = []; if (email) conditions.push({ email }); if (phone) conditions.push({ phone }); if (cpf) conditions.push({ cpf }); const user = await UserModel.findOne({ $or: conditions }).lean(); if (!user) return res.json({ exists: false }); return res.json({ exists: true, user: normalizeUser(user as unknown as Record<string, unknown>) }); } catch (err) { req.log.error(err); return res.status(500).json({ error: "Internal error" }); }
+});
+
+router.get("/:id", async (req, res) => {
+  try { const user = await UserModel.findById(req.params.id).lean(); if (!user) return res.status(404).json({ error: "User not found" }); return res.json(normalizeUser(user as unknown as Record<string, unknown>)); } catch (err) { req.log.error(err); return res.status(500).json({ error: "Internal error" }); }
 });
 
 const upsertSchema = z.object({ name: z.string().min(1), email: z.string().email(), phone: z.string().min(1), cpf: z.string().min(1), role: z.string().optional(), avatarColor: z.string().optional(), driverStatus: z.string().optional(), driverRejectionReason: z.string().optional(), vehicleType: z.string().optional(), vehicleModel: z.string().optional(), vehiclePlate: z.string().optional(), usuario_ativo: z.boolean().optional() });
