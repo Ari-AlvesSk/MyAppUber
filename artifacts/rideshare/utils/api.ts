@@ -34,20 +34,15 @@ export const api = {
     request<{ exists: boolean; user?: unknown }>(
       `/users/lookup/check?email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}&cpf=${encodeURIComponent(cpf)}`,
     ),
-  getUserByEmailPhoneCpf: (email: string, phone: string, cpf: string) =>
-    request<{ exists: boolean; user?: unknown }>(
-      `/users/lookup/check?email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}&cpf=${encodeURIComponent(cpf)}`,
-    ),
-  findExistingUser: (params: { email: string; phone: string; cpf: string }) =>
-    request<{ exists: boolean; user?: unknown }>(
-      `/users/lookup/check?email=${encodeURIComponent(params.email)}&phone=${encodeURIComponent(params.phone)}&cpf=${encodeURIComponent(params.cpf)}`,
-    ),
   getUser: (id: string) => request<Record<string, unknown>>(`/users/${id}`),
   upsertUser: (id: string, data: Record<string, unknown>) =>
     request<{ ok: boolean }>(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   updatePassword: (id: string, passwordHash: string) =>
     request<{ ok: boolean }>(`/users/${id}/password`, { method: "PATCH", body: JSON.stringify({ passwordHash }) }),
   getRides: (userId: string) => request<unknown[]>(`/rides?userId=${encodeURIComponent(userId)}`),
+  getDriverRides: (driverId: string) => request<unknown[]>(`/rides?driverId=${encodeURIComponent(driverId)}`),
+  getRideById: (id: string) => request<Record<string, unknown>>(`/rides/${id}`),
+  getPendingRides: (tier: string) => request<unknown[]>(`/rides/pending?tier=${encodeURIComponent(tier)}`),
   createRide: (data: Record<string, unknown>) =>
     request<{ ok: boolean }>("/rides", { method: "POST", body: JSON.stringify(data) }),
   updateRide: (id: string, data: Record<string, unknown>) =>

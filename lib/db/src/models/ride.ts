@@ -14,6 +14,7 @@ export interface IRide {
   durationMinutes: number;
   status: string;
   driver?: Record<string, unknown> | null;
+  driverId?: string | null;
   createdAt?: Date;
   completedAt?: Date | null;
 }
@@ -33,6 +34,7 @@ const rideSchema = new Schema<IRide>(
     durationMinutes: { type: Number, required: true },
     status: { type: String, default: "searching" },
     driver: { type: Schema.Types.Mixed, default: null },
+    driverId: { type: String, index: true, default: null },
     completedAt: { type: Date, default: null },
   },
   {

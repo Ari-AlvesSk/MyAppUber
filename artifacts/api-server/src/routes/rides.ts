@@ -4,7 +4,7 @@ import { z } from "zod";
 
 const router = Router();
 
-// GET /api/rides/all — admin: all rides (register before /:id)
+// GET /api/rides/all — admin: all rides
 router.get("/all", async (req, res) => {
   try {
     const rows = await RideModel.find().sort({ createdAt: -1 }).limit(200).lean();
@@ -15,13 +15,44 @@ router.get("/all", async (req, res) => {
   }
 });
 
-// GET /api/rides?userId=xxx
+// GET /api/rides/pending?tier= — driver: open ride requests
+router.get("/pending", async (req, res) => {
+  const tier = req.query["tier"] as string | undefined;
+  if (!tier) return res.status(400).json({ error: "tier required" });
+  try {
+    const rows = await RideModel.find({ status: "searching", tier })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+    return res.json(rows);
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// GET /api/rides/:id — get single ride (for polling)
+router.get("/:id", async (req, res) => {
+  try {
+    const ride = await RideModel.findById(req.params.id).lean();
+    if (!ride) return res.status(404).json({ error: "Ride not found" });
+    return res.json(ride);
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// GET /api/rides?userId= or ?driverId=
 router.get("/", async (req, res) => {
   const userId = req.query["userId"] as string | undefined;
-  if (!userId) return res.status(400).json({ error: "userId required" });
+  const driverId = req.query["driverId"] as string | undefined;
+
+  if (!userId && !driverId) return res.status(400).json({ error: "userId or driverId required" });
 
   try {
-    const rows = await RideModel.find({ userId }).sort({ createdAt: -1 }).limit(50).lean();
+    const query = userId ? { userId } : { driverId };
+    const rows = await RideModel.find(query).sort({ createdAt: -1 }).limit(100).lean();
     return res.json(rows);
   } catch (err) {
     req.log.error(err);
@@ -81,6 +112,7 @@ router.post("/", async (req, res) => {
 const patchSchema = z.object({
   status: z.string().optional(),
   driver: z.unknown().optional(),
+  driverId: z.string().optional(),
   completedAt: z.number().optional(),
 });
 
@@ -92,6 +124,7 @@ router.patch("/:id", async (req, res) => {
     const set: Record<string, unknown> = {};
     if (parsed.data.status !== undefined) set["status"] = parsed.data.status;
     if (parsed.data.driver !== undefined) set["driver"] = parsed.data.driver;
+    if (parsed.data.driverId !== undefined) set["driverId"] = parsed.data.driverId;
     if (parsed.data.completedAt !== undefined)
       set["completedAt"] = new Date(parsed.data.completedAt);
 

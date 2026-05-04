@@ -45,14 +45,8 @@ export default function HomeScreen() {
   const avatarColor = user?.avatarColor ?? colors.foreground;
   const completedCount = rides.filter((r) => r.status === "completed").length;
   const rideDistanceOk = useMemo(() => {
-    if (!coords || !activeRide) return false;
-    const driverPos = coords;
-    const pickup = activeRide.pickup.coords ?? activeRide.pickup.location ?? null;
-    const dropoff = activeRide.dropoff.coords ?? activeRide.dropoff.location ?? null;
-    const samePickup = pickup ? distanceMeters(driverPos, pickup) <= 75 : false;
-    const sameDropoff = dropoff ? distanceMeters(driverPos, dropoff) <= 75 : false;
-    return { samePickup, sameDropoff };
-  }, [coords, activeRide, distanceMeters]);
+    return { samePickup: false, sameDropoff: false };
+  }, []);
 
   const handleLocationPress = async () => {
     if (!granted) {
@@ -112,7 +106,7 @@ export default function HomeScreen() {
 
         <View style={styles.section}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Perto de você</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>{SUGGESTED_PLACES.map((p) => (<Pressable key={p.id} onPress={() => router.push({ pathname: "/booking", params: { destinationId: p.id } })} style={({ pressed }) => [styles.suggestCard, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}><View style={[styles.suggestIcon, { backgroundColor: colors.accent }]}><Feather name="map-pin" size={16} color={colors.accentForeground} /></View><Text style={[styles.suggestLabel, { color: colors.foreground }]}>{p.label}</Text><Text style={[styles.suggestAddr, { color: colors.mutedForeground }]} numberOfLines={2}>{p.address}</Text></Pressable>))}</ScrollView></View>
 
-        <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={styles.statItem}><Text style={[styles.statValue, { color: colors.foreground }]}>{completedCount}</Text><Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Corridas</Text></View><View style={[styles.divider, { backgroundColor: colors.border }]} /><View style={styles.statItem}><Text style={[styles.statValue, { color: colors.foreground }]}>4,96</Text><Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Avaliação</Text></View><View style={[styles.divider, { backgroundColor: colors.border }]} /><View style={styles.statItem}><Text style={[styles.statValue, { color: colors.accent }]}>Ouro</Text><Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Nível</Text></View></View>
+        <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={styles.statItem}><Text style={[styles.statValue, { color: colors.foreground }]}>{completedCount}</Text><Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Corridas</Text></View></View>
       </ScrollView>
     </View>
   );
