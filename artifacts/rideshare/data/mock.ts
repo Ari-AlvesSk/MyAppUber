@@ -4,14 +4,18 @@ export const SAVED_PLACES: Place[] = [
   {
     id: "home",
     label: "Casa",
-    address: "Rua Augusta, 300 – Consolação, São Paulo",
+    address: "Setor Central – Paraúna, GO",
     icon: "home",
+    lat: -16.0050,
+    lng: -49.7920,
   },
   {
     id: "work",
     label: "Trabalho",
-    address: "Av. Paulista, 1374 – Bela Vista, São Paulo",
+    address: "Setor Comercial – Paraúna, GO",
     icon: "briefcase",
+    lat: -16.0010,
+    lng: -49.7880,
   },
 ];
 
@@ -20,18 +24,38 @@ export const RECENT_PLACES: Place[] = [];
 export const SUGGESTED_PLACES: Place[] = [
   {
     id: "s1",
-    label: "Arena Corinthians",
-    address: "Av. Miguel Inácio Curi, 111 – Artur Alvim, SP",
+    label: "Praça Joaquim Pereira",
+    address: "Centro – Paraúna, GO",
+    lat: -16.0028,
+    lng: -49.7903,
   },
   {
     id: "s2",
-    label: "Mercadão de São Paulo",
-    address: "R. da Cantareira, 306 – Centro Histórico, SP",
+    label: "Hospital Municipal",
+    address: "Setor Hospitalar – Paraúna, GO",
+    lat: -16.0060,
+    lng: -49.7940,
   },
   {
     id: "s3",
-    label: "Pinacoteca do Estado",
-    address: "Praça da Luz, 2 – Luz, São Paulo",
+    label: "Câmara Municipal",
+    address: "Centro – Paraúna, GO",
+    lat: -16.0020,
+    lng: -49.7895,
+  },
+  {
+    id: "s4",
+    label: "Feira Livre",
+    address: "Setor Central – Paraúna, GO",
+    lat: -16.0035,
+    lng: -49.7910,
+  },
+  {
+    id: "s5",
+    label: "Igreja Matriz",
+    address: "Centro – Paraúna, GO",
+    lat: -16.0025,
+    lng: -49.7900,
   },
 ];
 
@@ -67,11 +91,13 @@ export function formatDistanceKm(km: number): string {
 
 const PLACE_DISTANCE_OVERRIDES: Record<string, number> = {
   current: 0,
-  home: 4.2,
-  work: 6.0,
-  s1: 4.5,
-  s2: 7.3,
-  s3: 6.1,
+  home: 1.2,
+  work: 0.8,
+  s1: 0.3,
+  s2: 0.7,
+  s3: 0.4,
+  s4: 0.5,
+  s5: 0.3,
 };
 
 export function estimateDistanceKm(placeId: string): number {
@@ -82,7 +108,7 @@ export function estimateDistanceKm(placeId: string): number {
     hash = (hash * 31 + placeId.charCodeAt(i)) | 0;
   }
   const positive = Math.abs(hash);
-  return 2 + (positive % 240) / 10;
+  return 0.5 + (positive % 60) / 10;
 }
 
 export function computePriceCents(

@@ -13,6 +13,8 @@ export type Place = {
   label: string;
   address: string;
   icon?: string;
+  lat?: number;
+  lng?: number;
 };
 
 export type RideOption = {

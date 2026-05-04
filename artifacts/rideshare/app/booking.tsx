@@ -59,7 +59,7 @@ export default function BookingScreen() {
   const pickup = useMemo<Place>(() => ({
     id: "current",
     label: customPickup?.label ?? "Localização atual",
-    address: customPickup?.address ?? (address && address !== "Permitir localização" && address !== "Buscando localização..." ? address : "Consolação, São Paulo"),
+    address: customPickup?.address ?? (address && address !== "Permitir localização" && address !== "Buscando localização..." ? address : "Paraúna, GO"),
   }), [address, customPickup]);
 
   useEffect(() => { registerLocationPickerCallback((result) => { setCustomPickup(result); }); }, []);
