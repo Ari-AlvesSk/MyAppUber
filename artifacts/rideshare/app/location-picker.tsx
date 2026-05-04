@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
-import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -21,36 +21,62 @@ import { LeafletMap } from "@/components/LeafletMap";
 import { useLocation } from "@/context/LocationContext";
 import { useColors } from "@/hooks/useColors";
 
-type PickerResult = { label: string; address: string; lat?: number; lng?: number };
+export type PickerResult = { label: string; address: string; lat?: number; lng?: number };
 
+// Separate callbacks for pickup vs destination — this fixes the bug
+let _pickupCb: ((r: PickerResult) => void) | null = null;
+let _destinationCb: ((r: PickerResult) => void) | null = null;
+
+export function registerPickupCallback(fn: (r: PickerResult) => void) { _pickupCb = fn; }
+export function registerDestinationCallback(fn: (r: PickerResult) => void) { _destinationCb = fn; }
+
+// Legacy compat — kept so other files that import it don't break
 export let _locationPickerCallback: ((r: PickerResult) => void) | null = null;
 export function registerLocationPickerCallback(fn: (r: PickerResult) => void) {
   _locationPickerCallback = fn;
+  _pickupCb = fn;
 }
 
 export default function LocationPickerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ mode?: string; pickupLat?: string; pickupLng?: string }>();
+  const mode = params.mode === "destination" ? "destination" : "pickup";
   const { address: gpsAddress, granted, requestPermission, coords } = useLocation();
 
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<PickerResult[]>([]);
   const [selected, setSelected] = useState<PickerResult | null>(null);
-  const [tapAddress, setTapAddress] = useState<string>("");
   const [reversing, setReversing] = useState(false);
 
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 24) : insets.top;
 
-  const mapLat = selected?.lat ?? coords?.latitude ?? -16.0028;
-  const mapLng = selected?.lng ?? coords?.longitude ?? -49.7903;
+  // For pickup mode: start centered on GPS. For destination mode: start centered on pickup location.
+  const defaultLat = mode === "destination"
+    ? (params.pickupLat ? parseFloat(params.pickupLat) : (coords?.latitude ?? -16.0028))
+    : (coords?.latitude ?? -16.0028);
+  const defaultLng = mode === "destination"
+    ? (params.pickupLng ? parseFloat(params.pickupLng) : (coords?.longitude ?? -49.7903))
+    : (coords?.longitude ?? -49.7903);
+
+  // Center map on selected or default
+  const mapLat = selected?.lat ?? defaultLat;
+  const mapLng = selected?.lng ?? defaultLng;
+
+  // For destination mode: show pickup as fixed origin dot
+  const pickupLat = mode === "destination" && params.pickupLat ? parseFloat(params.pickupLat) : undefined;
+  const pickupLng = mode === "destination" && params.pickupLng ? parseFloat(params.pickupLng) : undefined;
+
+  const title = mode === "pickup" ? "Escolher origem" : "Escolher destino";
+  const placeholder = mode === "pickup" ? "Buscar origem em Paraúna..." : "Buscar destino em Paraúna...";
+  const hint = mode === "pickup" ? "Toque para mudar a origem" : "Toque para escolher o destino";
 
   const handleMapTap = useCallback(async (lat: number, lng: number) => {
     if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
     setReversing(true);
-    setTapAddress("Obtendo endereço…");
     try {
       const rev = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
       const r = rev[0];
@@ -58,19 +84,11 @@ export default function LocationPickerScreen() {
         ? [r.street, r.streetNumber].filter(Boolean).join(", ") || r.district || r.city || "Local selecionado"
         : "Local selecionado";
       const addr = r
-        ? [r.district ?? r.subregion, r.city, r.region].filter(Boolean).join(", ")
+        ? [r.district ?? r.subregion, r.city, r.region].filter(Boolean).join(", ") || "Paraúna, GO"
         : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-      const result: PickerResult = { label, address: addr, lat, lng };
-      setSelected(result);
-      setTapAddress(addr);
+      setSelected({ label, address: addr, lat, lng });
     } catch {
-      const result: PickerResult = {
-        label: "Local selecionado",
-        address: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-        lat, lng,
-      };
-      setSelected(result);
-      setTapAddress(result.address);
+      setSelected({ label: "Local selecionado", address: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng });
     } finally {
       setReversing(false);
     }
@@ -88,7 +106,7 @@ export default function LocationPickerScreen() {
         if (rr) {
           found.push({
             label: [rr.street, rr.streetNumber].filter(Boolean).join(", ") || rr.district || text,
-            address: [rr.district ?? rr.subregion, rr.city, rr.region].filter(Boolean).join(", "),
+            address: [rr.district ?? rr.subregion, rr.city, rr.region].filter(Boolean).join(", ") || "Paraúna, GO",
             lat: r.latitude,
             lng: r.longitude,
           });
@@ -131,32 +149,51 @@ export default function LocationPickerScreen() {
       const result: PickerResult = r
         ? {
             label: "Localização atual",
-            address: [r.district ?? r.subregion, r.city, r.region].filter(Boolean).join(", "),
+            address: [r.district ?? r.subregion, r.city, r.region].filter(Boolean).join(", ") || gpsAddress,
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
           }
         : { label: "Localização atual", address: gpsAddress, lat: pos.coords.latitude, lng: pos.coords.longitude };
       setSelected(result);
     } catch {
-      if (gpsAddress) setSelected({ label: "Localização atual", address: gpsAddress });
+      if (coords) setSelected({ label: "Localização atual", address: gpsAddress, lat: coords.latitude, lng: coords.longitude });
     }
   };
 
   const confirmSelection = () => {
     if (!selected) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    _locationPickerCallback?.(selected);
+    // Call the correct callback based on mode
+    if (mode === "pickup") {
+      _pickupCb?.(selected);
+      _locationPickerCallback?.(selected);
+    } else {
+      _destinationCb?.(selected);
+    }
     router.back();
   };
 
+  const accentColor = mode === "pickup" ? "#00D26A" : "#0a0a0a";
+
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={[styles.root, { backgroundColor: colors.background }]}
+    >
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 10, borderBottomColor: colors.border }]}>
         <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconBtn, { backgroundColor: colors.muted, opacity: pressed ? 0.6 : 1 }]}>
           <Feather name="arrow-left" size={20} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Escolher localização</Text>
+        <View style={styles.headerCenter}>
+          <View style={[styles.modeBadge, { backgroundColor: mode === "pickup" ? "#00D26A22" : "#0a0a0a11" }]}>
+            <Feather name={mode === "pickup" ? "navigation" : "map-pin"} size={12} color={accentColor} />
+            <Text style={[styles.modeBadgeTxt, { color: accentColor }]}>
+              {mode === "pickup" ? "ORIGEM" : "DESTINO"}
+            </Text>
+          </View>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{title}</Text>
+        </View>
         <View style={{ width: 40 }} />
       </View>
 
@@ -170,33 +207,41 @@ export default function LocationPickerScreen() {
           onTap={handleMapTap}
           destLat={selected?.lat}
           destLng={selected?.lng}
+          originLat={pickupLat}
+          originLng={pickupLng}
+          mode={mode}
         />
 
-        {/* Address bubble */}
+        {/* Selected address bubble */}
         {(selected || reversing) && (
           <View style={[styles.addressBubble, { backgroundColor: colors.background }]}>
             {reversing
-              ? <ActivityIndicator size="small" color="#00D26A" />
-              : <Feather name="map-pin" size={13} color="#00D26A" />}
+              ? <ActivityIndicator size="small" color={accentColor} />
+              : <Feather name="map-pin" size={13} color={accentColor} />}
             <Text style={[styles.addressBubbleTxt, { color: colors.foreground }]} numberOfLines={1}>
-              {reversing ? "Obtendo endereço…" : selected?.label ?? tapAddress}
+              {reversing ? "Obtendo endereço…" : selected?.label}
             </Text>
           </View>
         )}
 
-        {/* Tap hint */}
+        {/* Tap hint (when nothing selected yet) */}
         {!selected && !reversing && (
           <View style={[styles.tapHint, { backgroundColor: "rgba(0,0,0,0.65)" }]}>
-            <Feather name="map-pin" size={12} color="#00D26A" />
-            <Text style={styles.tapHintTxt}>Toque no mapa para selecionar</Text>
+            <Feather name="map-pin" size={12} color={accentColor} />
+            <Text style={styles.tapHintTxt}>{hint}</Text>
           </View>
         )}
 
         {/* Confirm button */}
         {selected && !reversing && (
-          <Pressable onPress={confirmSelection} style={({ pressed }) => [styles.confirmBtn, { opacity: pressed ? 0.85 : 1 }]}>
-            <Feather name="check" size={16} color="#0a0a0a" />
-            <Text style={styles.confirmTxt}>Confirmar local</Text>
+          <Pressable
+            onPress={confirmSelection}
+            style={({ pressed }) => [styles.confirmBtn, { backgroundColor: accentColor, opacity: pressed ? 0.85 : 1 }]}
+          >
+            <Feather name="check" size={15} color={mode === "pickup" ? "#0a0a0a" : "#ffffff"} />
+            <Text style={[styles.confirmTxt, { color: mode === "pickup" ? "#0a0a0a" : "#ffffff" }]}>
+              Confirmar {mode === "pickup" ? "origem" : "destino"}
+            </Text>
           </Pressable>
         )}
       </View>
@@ -207,12 +252,12 @@ export default function LocationPickerScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Buscar endereço em Paraúna..."
+          placeholder={placeholder}
           placeholderTextColor={colors.mutedForeground}
           style={[styles.searchInput, { color: colors.foreground }]}
           returnKeyType="search"
         />
-        {searching && <ActivityIndicator size="small" color="#00D26A" />}
+        {searching && <ActivityIndicator size="small" color={accentColor} />}
         {query.length > 0 && !searching && (
           <Pressable onPress={() => { setQuery(""); setResults([]); }}>
             <Feather name="x" size={16} color={colors.mutedForeground} />
@@ -220,24 +265,37 @@ export default function LocationPickerScreen() {
         )}
       </View>
 
-      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+      >
         {/* GPS row */}
-        <Pressable onPress={useGps} style={({ pressed }) => [styles.gpsRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
-          <View style={[styles.gpsIcon, { backgroundColor: "#00D26A" + "22" }]}>
+        <Pressable
+          onPress={useGps}
+          style={({ pressed }) => [styles.gpsRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+        >
+          <View style={[styles.gpsIcon, { backgroundColor: "#00D26A22" }]}>
             <Feather name="navigation" size={18} color="#00D26A" />
           </View>
           <View>
             <Text style={[styles.gpsLabel, { color: colors.foreground }]}>Usar minha localização</Text>
-            <Text style={[styles.gpsSub, { color: colors.mutedForeground }]}>Detectar via GPS</Text>
+            <Text style={[styles.gpsSub, { color: colors.mutedForeground }]}>
+              {gpsAddress || "Detectar via GPS"}
+            </Text>
           </View>
         </Pressable>
 
-        {/* Results */}
+        {/* Search results */}
         {results.length > 0 && (
           <>
             <Text style={[styles.resultTitle, { color: colors.mutedForeground }]}>Resultados</Text>
             {results.map((r, i) => (
-              <Pressable key={i} onPress={() => selectResult(r)} style={({ pressed }) => [styles.resultRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
+              <Pressable
+                key={i}
+                onPress={() => selectResult(r)}
+                style={({ pressed }) => [styles.resultRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+              >
                 <View style={[styles.resultIcon, { backgroundColor: colors.muted }]}>
                   <Feather name="map-pin" size={16} color={colors.foreground} />
                 </View>
@@ -260,11 +318,17 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1,
   },
+  headerCenter: { flex: 1, alignItems: "center", gap: 4 },
+  modeBadge: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
+  },
+  modeBadgeTxt: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 1 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  headerTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
   mapWrap: { position: "relative" },
   addressBubble: {
-    position: "absolute", bottom: 56, alignSelf: "center",
+    position: "absolute", bottom: 54, alignSelf: "center",
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
     shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 8, elevation: 5,
@@ -280,10 +344,9 @@ const styles = StyleSheet.create({
   confirmBtn: {
     position: "absolute", bottom: 14, right: 14,
     flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: "#00D26A",
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999,
   },
-  confirmTxt: { fontSize: 13, fontFamily: "Inter_700Bold", color: "#0a0a0a" },
+  confirmTxt: { fontSize: 13, fontFamily: "Inter_700Bold" },
   searchWrap: {
     flexDirection: "row", alignItems: "center", gap: 10,
     marginHorizontal: 20, marginVertical: 12,
