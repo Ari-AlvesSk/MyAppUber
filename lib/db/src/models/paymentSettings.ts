@@ -9,6 +9,8 @@ export interface IPaymentSettings {
   cashEnabled: boolean;
   cardFeePercent: number;
   commissionPercent: number;
+  pricePerKmCar: number;
+  pricePerKmMoto: number;
   stripePublishableKey: string;
   stripeSecretKey: string;
   updatedAt: number;
@@ -24,6 +26,8 @@ const paymentSettingsSchema = new Schema<IPaymentSettings>(
     cashEnabled: { type: Boolean, default: true },
     cardFeePercent: { type: Number, default: 3.5 },
     commissionPercent: { type: Number, default: 20 },
+    pricePerKmCar: { type: Number, default: 2.5 },
+    pricePerKmMoto: { type: Number, default: 1.8 },
     stripePublishableKey: { type: String, default: "" },
     stripeSecretKey: { type: String, default: "" },
     updatedAt: { type: Number, default: () => Date.now() },

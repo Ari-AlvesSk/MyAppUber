@@ -195,6 +195,7 @@ export default function AdminScreen() {
     pixKey: "", pixKeyType: "cpf",
     pixEnabled: true, cardEnabled: true, cashEnabled: true,
     cardFeePercent: "3.5", commissionPercent: "20",
+    pricePerKmCar: "2.50", pricePerKmMoto: "1.80",
     stripePublishableKey: "", stripeSecretKey: "",
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -323,6 +324,8 @@ export default function AdminScreen() {
         cashEnabled: data.cashEnabled ?? true,
         cardFeePercent: String(data.cardFeePercent ?? 3.5),
         commissionPercent: String(data.commissionPercent ?? 20),
+        pricePerKmCar: String(data.pricePerKmCar ?? 2.5),
+        pricePerKmMoto: String(data.pricePerKmMoto ?? 1.8),
         stripePublishableKey: data.stripePublishableKey ?? "",
         stripeSecretKey: data.stripeSecretKey === "***" ? "" : (data.stripeSecretKey ?? ""),
       });
@@ -339,6 +342,8 @@ export default function AdminScreen() {
         ...paySettingsForm,
         cardFeePercent: parseFloat(paySettingsForm.cardFeePercent) || 3.5,
         commissionPercent: parseFloat(paySettingsForm.commissionPercent) || 20,
+        pricePerKmCar: parseFloat(paySettingsForm.pricePerKmCar) || 2.5,
+        pricePerKmMoto: parseFloat(paySettingsForm.pricePerKmMoto) || 1.8,
       });
       setSettingsSuccess(true);
       setTimeout(() => setSettingsSuccess(false), 3000);
@@ -877,6 +882,43 @@ export default function AdminScreen() {
                   placeholderTextColor={colors.mutedForeground}
                   value={paySettingsForm.cardFeePercent}
                   onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, cardFeePercent: v.replace(",", ".") }))}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Preço por km */}
+          <View style={[s.cfgCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={s.cfgCardHeader}>
+              <View style={[s.cfgIconBox, { backgroundColor: "#D9770622" }]}>
+                <Feather name="map-pin" size={16} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cfgCardTitle, { color: colors.foreground }]}>Preço por Quilômetro</Text>
+                <Text style={[s.cfgCardSub, { color: colors.mutedForeground }]}>Valor cobrado por km rodado (R$)</Text>
+              </View>
+            </View>
+            <View style={s.formRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.lbl, { color: colors.mutedForeground }]}>🚗 CARRO (R$/km)</Text>
+                <TextInput
+                  style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="2.50"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={paySettingsForm.pricePerKmCar}
+                  onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, pricePerKmCar: v.replace(",", ".") }))}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.lbl, { color: colors.mutedForeground }]}>🏍️ MOTO (R$/km)</Text>
+                <TextInput
+                  style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="1.80"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={paySettingsForm.pricePerKmMoto}
+                  onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, pricePerKmMoto: v.replace(",", ".") }))}
                   keyboardType="decimal-pad"
                 />
               </View>
