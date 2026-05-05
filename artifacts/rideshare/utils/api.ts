@@ -117,10 +117,18 @@ export const api = {
 
   getPublicPaymentSettings: () =>
     request<{
-      pixKey: string; pixKeyType: string;
       pixEnabled: boolean; cardEnabled: boolean; cashEnabled: boolean;
       stripePublishableKey: string;
     }>("/admin/payment-settings/public"),
+
+  createPaymentIntent: (data: { rideId: string; amountCents: number; paymentType: "card" | "pix"; paymentMethodId?: string }) =>
+    request<{ clientSecret: string; paymentIntentId: string; status: string; pixData: { hosted_voucher_url?: string; image_url_png?: string; image_url_svg?: string; data?: string } | null }>("/stripe/payment-intent", { method: "POST", body: JSON.stringify(data) }),
+
+  refundRide: (rideId: string) =>
+    request<{ ok: boolean; refunded: boolean; refundId?: string }>("/stripe/refund", { method: "POST", body: JSON.stringify({ rideId }) }),
+
+  getStripePublishableKey: () =>
+    request<{ publishableKey: string }>("/stripe/publishable-key"),
 
   getAdminPaymentSettings: () =>
     request<{

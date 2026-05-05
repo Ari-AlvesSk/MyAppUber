@@ -19,6 +19,7 @@
     "mongoose": "^9.6.1",
     "pino": "^9",
     "pino-http": "^10",
+    "stripe": "^22.1.0",
     "zod": "catalog:"
   },
   "devDependencies": {

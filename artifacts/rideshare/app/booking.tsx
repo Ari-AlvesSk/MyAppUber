@@ -75,10 +75,11 @@ export default function BookingScreen() {
   const [couponLoading, setCouponLoading] = useState(false);
   const [showCouponInput, setShowCouponInput] = useState(false);
 
-  // ── Pix payment modal ──
+  // ── Stripe payment modal ──
   const [showPixModal, setShowPixModal] = useState(false);
-  const [pixSettings, setPixSettings] = useState<{ pixKey: string; pixKeyType: string } | null>(null);
+  const [pixQrCode, setPixQrCode] = useState<string | null>(null);
   const [pixCopied, setPixCopied] = useState(false);
+  const [pendingRideId, setPendingRideId] = useState<string | null>(null);
 
   const selectedPaymentId = tempPaymentId ?? defaultPaymentId;
   const selectedPayment = payments.find((p) => p.id === selectedPaymentId) ?? payments[0];
@@ -185,8 +186,7 @@ export default function BookingScreen() {
     setCouponCode("");
   };
 
-  const doCreateRide = async () => {
-    setRequesting(true);
+  const createRideRecord = async (): Promise<string> => {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 6);
     const ride: Ride = {
       id,
@@ -204,40 +204,74 @@ export default function BookingScreen() {
     };
     await addRide(ride);
     if (tempPaymentId) await setDefaultPayment(tempPaymentId);
-    router.replace(`/ride/${id}`);
+    return id;
   };
 
   const handleConfirm = async () => {
     if (!destination) return;
+    setRequesting(true);
+
     const isPixPayment = selectedPayment?.id === "pix" || selectedPayment?.type === "wallet";
-    if (isPixPayment) {
-      setRequesting(true);
-      try {
-        const s = await api.getPublicPaymentSettings();
-        setPixSettings(s);
-      } catch {
-        setPixSettings({ pixKey: "Não configurado pelo admin", pixKeyType: "cpf" });
+
+    try {
+      if (isPixPayment) {
+        // 1. Cria a corrida
+        const rideId = await createRideRecord();
+        setPendingRideId(rideId);
+
+        // 2. Cria PaymentIntent Pix via Stripe
+        try {
+          const result = await api.createPaymentIntent({
+            rideId,
+            amountCents: finalPriceCents,
+            paymentType: "pix",
+          });
+          // Pega o código copia-e-cola do Pix
+          const pixCode = result.pixData?.data ?? result.pixData?.image_url_png ?? null;
+          setPixQrCode(pixCode);
+        } catch {
+          setPixQrCode(null);
+        }
+
+        setRequesting(false);
+        setShowPixModal(true);
+        return;
       }
+
+      // Cartão ou dinheiro: cria corrida direto
+      if (selectedPayment?.type === "card" && finalPriceCents > 0) {
+        // Cria a corrida, depois cobra via Stripe em background
+        const rideId = await createRideRecord();
+        api.createPaymentIntent({
+          rideId,
+          amountCents: finalPriceCents,
+          paymentType: "card",
+        }).catch(() => {});
+        router.replace(`/ride/${rideId}`);
+      } else {
+        const rideId = await createRideRecord();
+        router.replace(`/ride/${rideId}`);
+      }
+    } catch (e: any) {
       setRequesting(false);
-      setShowPixModal(true);
-      return;
     }
-    await doCreateRide();
   };
 
-  const handlePixConfirm = async () => {
+  const handlePixConfirm = () => {
     setShowPixModal(false);
-    await doCreateRide();
+    if (pendingRideId) {
+      router.replace(`/ride/${pendingRideId}`);
+    }
   };
 
-  const copyPixKey = () => {
-    const key = pixSettings?.pixKey ?? "";
+  const copyPixCode = () => {
+    const code = pixQrCode ?? "";
     if (Platform.OS === "web") {
-      try { (navigator as any).clipboard?.writeText(key); } catch {}
+      try { (navigator as any).clipboard?.writeText(code); } catch {}
     } else {
       try {
         const { Clipboard } = require("react-native") as any;
-        Clipboard?.setString?.(key);
+        Clipboard?.setString?.(code);
       } catch {}
     }
     setPixCopied(true);
@@ -469,7 +503,7 @@ export default function BookingScreen() {
         </View>
       )}
 
-      {/* ── Pix payment modal ── */}
+      {/* ── Pix payment modal (Stripe) ── */}
       <Modal visible={showPixModal} transparent animationType="slide" onRequestClose={() => setShowPixModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.pixSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 20 }]}>
@@ -480,7 +514,7 @@ export default function BookingScreen() {
               </View>
               <Text style={[styles.pixTitle, { color: colors.foreground }]}>Pagamento via Pix</Text>
               <Text style={[styles.pixSubtitle, { color: colors.mutedForeground }]}>
-                Realize o pagamento e confirme abaixo para chamar o motorista
+                Escaneie o QR ou copie o código e pague pelo seu banco. O motorista será chamado após a confirmação.
               </Text>
             </View>
 
@@ -489,38 +523,42 @@ export default function BookingScreen() {
               <Text style={[styles.pixAmount, { color: colors.accent }]}>{formatPrice(finalPriceCents)}</Text>
             </View>
 
-            <Text style={[styles.pixKeyLabel, { color: colors.mutedForeground }]}>CHAVE PIX DA PLATAFORMA</Text>
-            <View style={[styles.pixKeyBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.pixKeyType, { color: colors.mutedForeground }]}>
-                  {pixSettings?.pixKeyType === "cpf" ? "CPF"
-                    : pixSettings?.pixKeyType === "cnpj" ? "CNPJ"
-                    : pixSettings?.pixKeyType === "telefone" ? "Telefone"
-                    : pixSettings?.pixKeyType === "email" ? "E-mail"
-                    : "Chave aleatória"}
+            {pixQrCode ? (
+              <>
+                <Text style={[styles.pixKeyLabel, { color: colors.mutedForeground }]}>CÓDIGO PIX (COPIA E COLA)</Text>
+                <View style={[styles.pixKeyBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                  <TextInput
+                    value={pixQrCode}
+                    editable={false}
+                    selectTextOnFocus
+                    multiline
+                    numberOfLines={2}
+                    style={[styles.pixKeyValue, { color: colors.foreground, flex: 1, fontSize: 11 }]}
+                  />
+                  <Pressable
+                    onPress={copyPixCode}
+                    style={({ pressed }) => [styles.pixCopyBtn, { backgroundColor: pixCopied ? colors.accent : colors.accent + "22", opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <Feather name={pixCopied ? "check" : "copy"} size={15} color={pixCopied ? colors.accentForeground : colors.accent} />
+                    <Text style={[styles.pixCopyTxt, { color: pixCopied ? colors.accentForeground : colors.accent }]}>
+                      {pixCopied ? "Copiado!" : "Copiar"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <View style={[styles.pixInfoBox, { backgroundColor: colors.muted }]}>
+                <Feather name="zap" size={13} color={colors.mutedForeground} />
+                <Text style={[styles.pixInfoTxt, { color: colors.mutedForeground }]}>
+                  Pagamento Pix gerado via Stripe. Abra seu banco e use a opção Pix para pagar.
                 </Text>
-                <TextInput
-                  value={pixSettings?.pixKey ?? "—"}
-                  editable={false}
-                  selectTextOnFocus
-                  style={[styles.pixKeyValue, { color: colors.foreground }]}
-                />
               </View>
-              <Pressable
-                onPress={copyPixKey}
-                style={({ pressed }) => [styles.pixCopyBtn, { backgroundColor: pixCopied ? colors.accent : colors.accent + "22", opacity: pressed ? 0.7 : 1 }]}
-              >
-                <Feather name={pixCopied ? "check" : "copy"} size={15} color={pixCopied ? colors.accentForeground : colors.accent} />
-                <Text style={[styles.pixCopyTxt, { color: pixCopied ? colors.accentForeground : colors.accent }]}>
-                  {pixCopied ? "Copiado!" : "Copiar"}
-                </Text>
-              </Pressable>
-            </View>
+            )}
 
             <View style={[styles.pixInfoBox, { backgroundColor: colors.muted }]}>
-              <Feather name="info" size={13} color={colors.mutedForeground} />
+              <Feather name="shield" size={13} color={colors.mutedForeground} />
               <Text style={[styles.pixInfoTxt, { color: colors.mutedForeground }]}>
-                Abra seu banco, faça o Pix com a chave acima e volte aqui para confirmar.
+                Processado com segurança via Stripe. Se o motorista cancelar, o reembolso é automático.
               </Text>
             </View>
 

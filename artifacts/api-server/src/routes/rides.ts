@@ -128,7 +128,33 @@ router.patch("/:id", async (req, res) => {
     if (parsed.data.completedAt !== undefined)
       set["completedAt"] = new Date(parsed.data.completedAt);
 
-    await RideModel.findByIdAndUpdate(req.params.id, { $set: set });
+    const ride = await RideModel.findByIdAndUpdate(req.params.id, { $set: set }, { new: false }).lean();
+
+    // Reembolso automático quando motorista cancela e há pagamento Stripe registrado
+    if (parsed.data.status === "cancelled" && ride) {
+      const intentId = (ride as any).stripePaymentIntentId;
+      if (intentId) {
+        try {
+          const stripeKey = process.env.STRIPE_SECRET_KEY ?? "";
+          if (stripeKey) {
+            const { default: Stripe } = await import("stripe");
+            const stripe = new Stripe(stripeKey, { apiVersion: "2025-04-30" });
+            const refund = await stripe.refunds.create({
+              payment_intent: intentId,
+              reason: "requested_by_customer",
+            });
+            await RideModel.findByIdAndUpdate(req.params.id, {
+              $set: { stripeRefundId: refund.id, refundedAt: Date.now() },
+            });
+            req.log.info({ rideId: req.params.id, refundId: refund.id }, "Reembolso Stripe automático processado");
+          }
+        } catch (refundErr) {
+          req.log.error({ err: refundErr, rideId: req.params.id }, "Erro ao processar reembolso automático");
+          // Não bloqueia a atualização do status
+        }
+      }
+    }
+
     return res.json({ ok: true });
   } catch (err) {
     req.log.error(err);
