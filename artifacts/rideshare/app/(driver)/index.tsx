@@ -636,8 +636,12 @@ export default function DriverHomeScreen() {
 // Helper component to capture iframe ref from LeafletMap's rendered iframe
 function IframeCapture({ onCapture }: { onCapture: (el: HTMLIFrameElement | null) => void }) {
   useEffect(() => {
+    if (Platform.OS !== "web") {
+      onCapture(null);
+      return () => onCapture(null);
+    }
     // Find the most recently rendered iframe (the ride map iframe)
-    const iframes = document.querySelectorAll("iframe[title='Mapa']");
+    const iframes = (document as Document).querySelectorAll("iframe[title='Mapa']");
     const last = iframes[iframes.length - 1] as HTMLIFrameElement | null;
     onCapture(last ?? null);
     return () => onCapture(null);

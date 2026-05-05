@@ -197,9 +197,10 @@ export default function RideScreen() {
     return () => loop.stop();
   }, [ride?.status, pulse]);
 
-  // Capture iframe ref for postMessages
+  // Capture iframe ref for postMessages (web only)
   useEffect(() => {
-    const iframes = document.querySelectorAll("iframe[title='Mapa']");
+    if (Platform.OS !== "web") return;
+    const iframes = (document as Document).querySelectorAll("iframe[title='Mapa']");
     const last = iframes[iframes.length - 1] as HTMLIFrameElement | null;
     mapIframeRef.current = last;
   });
