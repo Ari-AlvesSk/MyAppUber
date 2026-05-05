@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { RideModel } from "@workspace/db";
 import { z } from "zod";
+import { sendPushToUser } from "../lib/pushNotifications";
 
 const router = Router();
 
@@ -137,6 +138,33 @@ router.patch("/:id", async (req, res) => {
     if (parsed.data.mpPaymentId !== undefined) set["mpPaymentId"] = parsed.data.mpPaymentId;
 
     const ride = await RideModel.findByIdAndUpdate(req.params.id, { $set: set }, { new: false }).lean();
+
+    // Push notifications on status changes
+    if (parsed.data.status && ride) {
+      const r = ride as Record<string, unknown>;
+      const newStatus = parsed.data.status;
+      const userId = r["userId"] as string | undefined;
+      const driverId = r["driverId"] as string | undefined;
+      const driverInfo = r["driver"] as Record<string, unknown> | null | undefined;
+      const driverName = (driverInfo?.["name"] as string | undefined) ?? "Seu motorista";
+
+      if (userId && newStatus === "accepted") {
+        sendPushToUser(userId, "Motorista encontrado! 🚗", `${driverName} está a caminho.`, { rideId: req.params.id }).catch(() => {});
+      } else if (userId && newStatus === "arriving") {
+        sendPushToUser(userId, "Motorista chegando! 📍", `${driverName} está chegando ao ponto de embarque.`, { rideId: req.params.id }).catch(() => {});
+      } else if (userId && newStatus === "in_progress") {
+        sendPushToUser(userId, "Corrida iniciada 🚀", "Sua corrida começou. Boa viagem!", { rideId: req.params.id }).catch(() => {});
+      } else if (userId && newStatus === "completed") {
+        sendPushToUser(userId, "Corrida concluída ✅", "Chegamos! Obrigado por usar o Paraúna Mobi.", { rideId: req.params.id }).catch(() => {});
+      } else if (newStatus === "cancelled") {
+        if (userId) {
+          sendPushToUser(userId, "Corrida cancelada", "Sua corrida foi cancelada.", { rideId: req.params.id }).catch(() => {});
+        }
+        if (driverId) {
+          sendPushToUser(driverId, "Corrida cancelada", "A corrida foi cancelada pelo passageiro.", { rideId: req.params.id }).catch(() => {});
+        }
+      }
+    }
 
     // Reembolso automático quando motorista cancela e há pagamento Stripe registrado
     if (parsed.data.status === "cancelled" && ride) {

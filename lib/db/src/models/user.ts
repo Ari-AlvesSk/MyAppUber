@@ -13,6 +13,7 @@ export interface IUser {
   vehicleType?: string;
   vehicleModel?: string;
   vehiclePlate?: string;
+  pushToken?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -31,6 +32,7 @@ const userSchema = new Schema<IUser>(
     vehicleType: { type: String },
     vehicleModel: { type: String },
     vehiclePlate: { type: String },
+    pushToken: { type: String },
   },
   {
     _id: false,

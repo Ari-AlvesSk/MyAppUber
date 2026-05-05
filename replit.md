@@ -49,11 +49,21 @@ A ride-hailing (rideshare) app for Brazil: Expo mobile + web frontend for passen
 - App is in Brazilian Portuguese (pt-BR)
 - Theme: black background + lime green `#00D26A` accent
 
+## Push Notifications
+
+- **Backend**: `expo-server-sdk` sends via Expo's push service (handles APNs + FCM automatically)
+- **Utility**: `artifacts/api-server/src/lib/pushNotifications.ts` — `sendPushToUser(userId, title, body)` and `sendPushToAdmins(...)`
+- **Token endpoint**: `POST /api/notifications/token` saves token; `DELETE /api/notifications/token` clears on logout
+- **Triggers**: ride status changes (accepted, arriving, in_progress, completed, cancelled), withdrawal approved/rejected, new driver registration → admin
+- **Frontend**: `artifacts/rideshare/hooks/usePushNotifications.ts` — registers on native only (web stays with in-app toasts), activated via `<PushTokenRegistrar />` in `_layout.tsx`
+- Push tokens stored in `pushToken` field on the `usuarios` MongoDB collection
+
 ## Gotchas
 
 - The app shows a location permission gate before login on web (expected behavior — dismiss or navigate to /login directly)
 - Mongoose logs duplicate index warnings for User model on startup — harmless, can be fixed by removing duplicate `index: true` declarations in the User schema
 - `REPLIT_EXPO_DEV_DOMAIN` is used for the Expo packager proxy URL in the dev script
+- Push notifications only work on real native devices (iOS/Android) — Expo Go or a dev build; web uses in-app toasts instead
 
 ## Pointers
 

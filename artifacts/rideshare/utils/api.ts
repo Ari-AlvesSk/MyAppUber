@@ -153,4 +153,10 @@ export const api = {
 
   getMpPixStatus: (mpPaymentId: string) =>
     request<{ status: string; approved: boolean }>(`/mp/pix/${mpPaymentId}/status`),
+
+  savePushToken: (userId: string, pushToken: string) =>
+    request<{ ok: boolean }>("/notifications/token", { method: "POST", body: JSON.stringify({ userId, pushToken }) }),
+
+  removePushToken: (userId: string) =>
+    request<{ ok: boolean }>("/notifications/token", { method: "DELETE", body: JSON.stringify({ userId }) }),
 };

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { WithdrawalModel } from "@workspace/db";
 import { z } from "zod";
+import { sendPushToUser } from "../lib/pushNotifications";
 
 const router = Router();
 
@@ -60,7 +61,18 @@ router.patch("/:id", async (req, res) => {
   try {
     const set: Record<string, unknown> = { status: parsed.data.status, processedAt: new Date() };
     if (parsed.data.rejectionReason) set["rejectionReason"] = parsed.data.rejectionReason;
-    await WithdrawalModel.findByIdAndUpdate(req.params.id, { $set: set });
+    const withdrawal = await WithdrawalModel.findByIdAndUpdate(req.params.id, { $set: set }, { new: false }).lean();
+    if (withdrawal) {
+      const driverId = (withdrawal as Record<string, unknown>)["driverId"] as string | undefined;
+      if (driverId) {
+        if (parsed.data.status === "approved") {
+          sendPushToUser(driverId, "Saque aprovado! 💸", "Seu pedido de saque foi aprovado e será processado em breve.").catch(() => {});
+        } else if (parsed.data.status === "rejected") {
+          const reason = parsed.data.rejectionReason ? `: ${parsed.data.rejectionReason}` : ".";
+          sendPushToUser(driverId, "Saque recusado", `Seu pedido de saque foi recusado${reason}`).catch(() => {});
+        }
+      }
+    }
     return res.json({ ok: true });
   } catch (err) { req.log.error(err); return res.status(500).json({ error: "Internal error" }); }
 });

@@ -21,10 +21,17 @@ import { LocationProvider, useLocation } from "@/context/LocationContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { RideProvider } from "@/context/RideContext";
 import { useColors } from "@/hooks/useColors";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+
+function PushTokenRegistrar() {
+  const { user } = useAuth();
+  usePushNotifications(user?.id ?? null);
+  return null;
+}
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, hydrated } = useAuth();
@@ -186,6 +193,7 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
+            <PushTokenRegistrar />
             <RideProvider>
               <LocationProvider>
                 <GestureHandlerRootView style={{ flex: 1 }}>

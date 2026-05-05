@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { UserModel } from "@workspace/db";
 import { z } from "zod";
+import { sendPushToAdmins } from "../lib/pushNotifications";
 
 const router = Router();
 
@@ -44,7 +45,15 @@ const upsertSchema = z.object({ name: z.string().min(1), email: z.string().email
 router.put("/:id", async (req, res) => {
   const parsed = upsertSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error });
-  try { await UserModel.findByIdAndUpdate(req.params.id, { _id: req.params.id, ...parsed.data, email: parsed.data.email.toLowerCase() }, { upsert: true, new: true, setDefaultsOnInsert: true }); return res.json({ ok: true }); } catch (err) { req.log.error(err); return res.status(500).json({ error: "Internal error" }); }
+  try {
+    const existing = await UserModel.findById(req.params.id).lean();
+    await UserModel.findByIdAndUpdate(req.params.id, { _id: req.params.id, ...parsed.data, email: parsed.data.email.toLowerCase() }, { upsert: true, new: true, setDefaultsOnInsert: true });
+    // Notify admins when a new driver registers
+    if (!existing && parsed.data.role === "driver") {
+      sendPushToAdmins("Novo motorista aguardando aprovação 🚗", `${parsed.data.name} se cadastrou como motorista.`).catch(() => {});
+    }
+    return res.json({ ok: true });
+  } catch (err) { req.log.error(err); return res.status(500).json({ error: "Internal error" }); }
 });
 
 const pwdSchema = z.object({ passwordHash: z.string().min(1) });
