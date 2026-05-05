@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +23,15 @@ import { useColors } from "@/hooks/useColors";
 import { api } from "@/utils/api";
 import type { Driver, Ride } from "@/types";
 
+const CANCEL_REASONS_PASSENGER = [
+  "Motorista demorando muito",
+  "Erro no endereço",
+  "Emergência pessoal",
+  "Mudei de planos",
+  "Pedi por engano",
+  "Outro motivo",
+];
+
 export default function RideScreen() {
   const colors = useColors();
   const router = useRouter();
@@ -33,7 +43,8 @@ export default function RideScreen() {
 
   const pulse = useRef(new Animated.Value(0)).current;
   const [etaSeconds, setEtaSeconds] = useState<number>(180);
-  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [mpPaymentId, setMpPaymentId] = useState<string | null>(null);
 
   // Live driver tracking state
@@ -218,13 +229,22 @@ export default function RideScreen() {
   }
 
   const handleCancel = () => {
-    if (confirmingCancel) {
-      cancelRide(ride.id);
-      router.replace("/(tabs)");
-    } else {
-      setConfirmingCancel(true);
-      setTimeout(() => setConfirmingCancel(false), 3500);
-    }
+    setSelectedReason(null);
+    setCancelModalVisible(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!selectedReason || !ride) return;
+    setCancelModalVisible(false);
+    try {
+      await api.updateRide(ride.id, {
+        status: "cancelled",
+        cancelReason: selectedReason,
+        completedAt: Date.now(),
+      });
+    } catch {}
+    updateRide(ride.id, { status: "cancelled", completedAt: Date.now() });
+    router.replace("/(tabs)");
   };
 
   const formatEta = (s: number) => {
@@ -362,6 +382,15 @@ export default function RideScreen() {
                 </View>
               )}
 
+              {/* Price row */}
+              <View style={[styles.priceRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.priceLeft}>
+                  <Feather name="dollar-sign" size={15} color={colors.accent} />
+                  <Text style={[styles.priceLabel, { color: colors.mutedForeground }]}>Valor da corrida</Text>
+                </View>
+                <Text style={[styles.priceValue, { color: colors.accent }]}>{formatPrice(ride.priceCents)}</Text>
+              </View>
+
               {/* Phase message */}
               {ride.status === "in_progress" && (
                 <View style={[styles.phaseMsg, { backgroundColor: colors.card, borderColor: colors.accent }]}>
@@ -443,10 +472,10 @@ export default function RideScreen() {
         </ScrollView>
 
         <View style={styles.actions}>
-          {(ride.status === "searching" || ride.status === "matched") && (
+          {(ride.status === "searching" || ride.status === "matched" || ride.status === "arriving") && (
             <PrimaryButton
-              label={confirmingCancel ? "Toque novamente para confirmar" : "Cancelar corrida"}
-              variant={confirmingCancel ? "destructive" : "secondary"}
+              label="Cancelar corrida"
+              variant="secondary"
               onPress={handleCancel}
             />
           )}
@@ -458,6 +487,59 @@ export default function RideScreen() {
           )}
         </View>
       </View>
+
+      {/* Cancel reason modal */}
+      <Modal
+        visible={cancelModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCancelModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Cancelar corrida</Text>
+            <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>Selecione o motivo para prosseguir</Text>
+
+            <View style={styles.reasonList}>
+              {CANCEL_REASONS_PASSENGER.map((reason) => (
+                <Pressable
+                  key={reason}
+                  onPress={() => setSelectedReason(reason)}
+                  style={({ pressed }) => [
+                    styles.reasonRow,
+                    {
+                      backgroundColor: selectedReason === reason ? colors.accent + "22" : colors.card,
+                      borderColor: selectedReason === reason ? colors.accent : colors.border,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <View style={[styles.reasonRadio, { borderColor: selectedReason === reason ? colors.accent : colors.border }]}>
+                    {selectedReason === reason && (
+                      <View style={[styles.reasonRadioInner, { backgroundColor: colors.accent }]} />
+                    )}
+                  </View>
+                  <Text style={[styles.reasonTxt, { color: colors.foreground }]}>{reason}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={styles.modalActions}>
+              <PrimaryButton
+                label="Confirmar cancelamento"
+                variant="destructive"
+                onPress={handleConfirmCancel}
+              />
+              <PrimaryButton
+                label="Voltar"
+                variant="secondary"
+                onPress={() => setCancelModalVisible(false)}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -518,4 +600,19 @@ const styles = StyleSheet.create({
   routeLabel: { fontSize: 14, fontFamily: "Inter_700Bold" },
   routeSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   actions: { gap: 10, paddingTop: 12 },
+  priceRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderRadius: 14, borderWidth: 1 },
+  priceLeft: { flexDirection: "row", alignItems: "center", gap: 7 },
+  priceLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  priceValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
+  modalSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 36 },
+  modalHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold", marginBottom: 4 },
+  modalSub: { fontSize: 14, fontFamily: "Inter_500Medium", marginBottom: 20 },
+  reasonList: { gap: 10, marginBottom: 24 },
+  reasonRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1.5 },
+  reasonRadio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  reasonRadioInner: { width: 10, height: 10, borderRadius: 5 },
+  reasonTxt: { fontSize: 14, fontFamily: "Inter_500Medium", flex: 1 },
+  modalActions: { gap: 10 },
 });
