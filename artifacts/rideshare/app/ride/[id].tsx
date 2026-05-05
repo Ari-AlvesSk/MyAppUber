@@ -36,6 +36,24 @@ export default function RideScreen() {
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [mpPaymentId, setMpPaymentId] = useState<string | null>(null);
 
+  // Live driver tracking state
+  const [driverLat, setDriverLat] = useState<number | null>(null);
+  const [driverLng, setDriverLng] = useState<number | null>(null);
+  const [driverVehicleType, setDriverVehicleType] = useState<"moto" | "car">("car");
+  const mapIframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  // Determine the current route target (where the car is heading)
+  const routeTarget = (() => {
+    if (!ride) return null;
+    if (ride.status === "arriving" || ride.status === "matched") {
+      return { lat: ride.pickup.lat, lng: ride.pickup.lng };
+    }
+    if (ride.status === "in_progress") {
+      return { lat: ride.dropoff.lat, lng: ride.dropoff.lng };
+    }
+    return null;
+  })();
+
   // Poll for ride status updates from server
   useEffect(() => {
     if (!params.id) return;
@@ -79,6 +97,67 @@ export default function RideScreen() {
     return () => clearInterval(interval);
   }, [params.id, ride?.status, updateRide, mpPaymentId]);
 
+  // Poll driver location (real-time car tracking)
+  useEffect(() => {
+    if (!ride?.driver?.id) return;
+    if (ride.status !== "matched" && ride.status !== "arriving" && ride.status !== "in_progress") return;
+
+    const driverId = ride.driver.id;
+    const vType = (ride.driver.vehicleType === "moto" ? "moto" : "car") as "moto" | "car";
+
+    const pollLocation = async () => {
+      try {
+        const loc = await api.getDriverLocation(driverId);
+        const newLat = loc.lat;
+        const newLng = loc.lng;
+        setDriverLat(newLat);
+        setDriverLng(newLng);
+        setDriverVehicleType(vType);
+
+        // Update driver car position on map
+        if (mapIframeRef.current) {
+          try {
+            mapIframeRef.current.contentWindow?.postMessage(
+              JSON.stringify({ type: "updateDriverCar", lat: newLat, lng: newLng, vehicleType: vType }),
+              "*",
+            );
+            // Also update the route: driver → target
+            const target = ride.status === "in_progress"
+              ? { lat: ride.dropoff.lat, lng: ride.dropoff.lng }
+              : { lat: ride.pickup.lat, lng: ride.pickup.lng };
+            if (target.lat != null && target.lng != null) {
+              mapIframeRef.current.contentWindow?.postMessage(
+                JSON.stringify({ type: "updateRoute", aLat: newLat, aLng: newLng, bLat: target.lat, bLng: target.lng }),
+                "*",
+              );
+            }
+          } catch {}
+        }
+      } catch {}
+    };
+
+    pollLocation();
+    const interval = setInterval(pollLocation, 5000);
+    return () => clearInterval(interval);
+  }, [ride?.driver?.id, ride?.status]);
+
+  // When status changes to in_progress, update route target to dropoff
+  useEffect(() => {
+    if (ride?.status !== "in_progress") return;
+    if (!mapIframeRef.current) return;
+    if (driverLat == null || ride.dropoff.lat == null) return;
+    try {
+      mapIframeRef.current.contentWindow?.postMessage(
+        JSON.stringify({ type: "setTap", lat: ride.dropoff.lat, lng: ride.dropoff.lng, color: "#0a0a0a", innerColor: "#00D26A" }),
+        "*",
+      );
+      mapIframeRef.current.contentWindow?.postMessage(
+        JSON.stringify({ type: "updateRoute", aLat: driverLat, aLng: driverLng, bLat: ride.dropoff.lat, bLng: ride.dropoff.lng }),
+        "*",
+      );
+    } catch {}
+  }, [ride?.status]);
+
   // Poll Mercado Pago to auto-confirm Pix payment
   useEffect(() => {
     if (!mpPaymentId) return;
@@ -118,6 +197,13 @@ export default function RideScreen() {
     return () => loop.stop();
   }, [ride?.status, pulse]);
 
+  // Capture iframe ref for postMessages
+  useEffect(() => {
+    const iframes = document.querySelectorAll("iframe[title='Mapa']");
+    const last = iframes[iframes.length - 1] as HTMLIFrameElement | null;
+    mapIframeRef.current = last;
+  });
+
   if (!ride) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -146,18 +232,35 @@ export default function RideScreen() {
     return `${m}:${ss.toString().padStart(2, "0")}`;
   };
 
+  // Map center: passenger's pickup location (fixed pin for passenger)
+  const mapCenterLat = ride.pickup.lat ?? -16.0028;
+  const mapCenterLng = ride.pickup.lng ?? -49.7903;
+
+  // Live route: driver → pickup (arriving), driver → dropoff (in_progress)
+  const showLiveTracking = (ride.status === "matched" || ride.status === "arriving" || ride.status === "in_progress") && driverLat != null;
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.mapWrap, { paddingTop: insets.top }]}>
         <LeafletMap
           height={420}
-          lat={ride.pickup.lat ?? -16.0028}
-          lng={ride.pickup.lng ?? -49.7903}
-          originLat={ride.pickup.lat}
-          originLng={ride.pickup.lng}
-          destLat={ride.dropoff.lat}
-          destLng={ride.dropoff.lng}
-          showRoute={ride.status !== "completed"}
+          lat={mapCenterLat}
+          lng={mapCenterLng}
+          // Destination pin
+          destLat={ride.status === "in_progress" ? (ride.dropoff.lat ?? undefined) : (ride.pickup.lat ?? undefined)}
+          destLng={ride.status === "in_progress" ? (ride.dropoff.lng ?? undefined) : (ride.pickup.lng ?? undefined)}
+          // Driver car (moving)
+          driverCarLat={driverLat}
+          driverCarLng={driverLng}
+          driverCarVehicleType={driverVehicleType}
+          // Live route: driver → target
+          routeALat={showLiveTracking ? driverLat : undefined}
+          routeALng={showLiveTracking ? driverLng : undefined}
+          routeBLat={showLiveTracking ? (routeTarget?.lat ?? undefined) : undefined}
+          routeBLng={showLiveTracking ? (routeTarget?.lng ?? undefined) : undefined}
+          showRoute={!showLiveTracking && ride.status !== "completed"}
+          originLat={!showLiveTracking ? ride.pickup.lat : undefined}
+          originLng={!showLiveTracking ? ride.pickup.lng : undefined}
           interactive={false}
         />
         <Pressable
@@ -166,6 +269,14 @@ export default function RideScreen() {
         >
           <Feather name="chevron-left" size={22} color={colors.foreground} />
         </Pressable>
+
+        {/* Live tracking indicator */}
+        {showLiveTracking && (
+          <View style={[styles.trackingBadge, { top: insets.top + 12, right: 16, backgroundColor: colors.accent }]}>
+            <View style={[styles.trackingDot, { backgroundColor: colors.accentForeground }]} />
+            <Text style={[styles.trackingTxt, { color: colors.accentForeground }]}>Ao vivo</Text>
+          </View>
+        )}
       </View>
 
       <View style={[styles.sheet, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 14 }]}>
@@ -203,7 +314,9 @@ export default function RideScreen() {
                 <View style={[styles.statusPill, { backgroundColor: colors.accent }]}>
                   <View style={[styles.statusDot, { backgroundColor: colors.accentForeground }]} />
                   <Text style={[styles.statusTxt, { color: colors.accentForeground }]}>
-                    {ride.status === "matched" ? "Motorista encontrado" : ride.status === "arriving" ? "Motorista a caminho" : "Em viagem"}
+                    {ride.status === "matched" ? "Motorista encontrado"
+                      : ride.status === "arriving" ? "Motorista a caminho"
+                      : "Em viagem 🚗"}
                   </Text>
                 </View>
                 {(ride.status === "arriving" || ride.status === "in_progress") && (
@@ -245,6 +358,24 @@ export default function RideScreen() {
                       <Text style={[styles.plateTxt, { color: colors.background }]}>{ride.driver.plate}</Text>
                     </View>
                   ) : null}
+                </View>
+              )}
+
+              {/* Phase message */}
+              {ride.status === "in_progress" && (
+                <View style={[styles.phaseMsg, { backgroundColor: colors.card, borderColor: colors.accent }]}>
+                  <Feather name="navigation" size={14} color={colors.accent} />
+                  <Text style={[styles.phaseMsgTxt, { color: colors.foreground }]}>
+                    A caminho do seu destino
+                  </Text>
+                </View>
+              )}
+              {ride.status === "arriving" && (
+                <View style={[styles.phaseMsg, { backgroundColor: colors.card, borderColor: colors.accent }]}>
+                  <Feather name="map-pin" size={14} color={colors.accent} />
+                  <Text style={[styles.phaseMsgTxt, { color: colors.foreground }]}>
+                    Motorista chegando ao ponto de embarque
+                  </Text>
                 </View>
               )}
             </View>
@@ -336,6 +467,9 @@ const styles = StyleSheet.create({
   notFound: { fontSize: 17, fontFamily: "Inter_700Bold" },
   mapWrap: { position: "relative" },
   backBtn: { position: "absolute", left: 16, width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  trackingBadge: { position: "absolute", flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  trackingDot: { width: 7, height: 7, borderRadius: 3.5 },
+  trackingTxt: { fontSize: 12, fontFamily: "Inter_700Bold" },
   sheet: { flex: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, marginTop: -28, paddingHorizontal: 20, paddingTop: 8 },
   handle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginBottom: 12 },
   searchBlock: { alignItems: "center", paddingVertical: 24, gap: 10 },
@@ -363,6 +497,8 @@ const styles = StyleSheet.create({
   carName: { fontSize: 15, fontFamily: "Inter_700Bold", marginTop: 2 },
   plate: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   plateTxt: { fontSize: 14, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  phaseMsg: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderRadius: 14, borderWidth: 1.5 },
+  phaseMsgTxt: { fontSize: 14, fontFamily: "Inter_600SemiBold", flex: 1 },
   completedBlock: { alignItems: "center", paddingVertical: 24, gap: 10 },
   completedIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 8 },
   receiptCard: { width: "100%", borderRadius: 18, borderWidth: 1, marginTop: 8 },

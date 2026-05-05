@@ -107,12 +107,13 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setPlatformRides(nextPlatform);
     await persistPlatformRides(nextPlatform);
 
-    // Sync to API
     if (userId) {
       api.createRide({
         id: ride.id, userId,
         pickupLabel: ride.pickup.label, pickupAddress: ride.pickup.address,
+        pickupLat: ride.pickup.lat ?? null, pickupLng: ride.pickup.lng ?? null,
         dropoffLabel: ride.dropoff.label, dropoffAddress: ride.dropoff.address,
+        dropoffLat: ride.dropoff.lat ?? null, dropoffLng: ride.dropoff.lng ?? null,
         tier: ride.tier, tierName: ride.tierName,
         priceCents: ride.priceCents, distanceKm: ride.distanceKm,
         durationMinutes: ride.durationMinutes, status: ride.status,
@@ -129,7 +130,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setPlatformRides(nextPlatform);
     await persistPlatformRides(nextPlatform);
 
-    // Sync to API
     const apiPatch: Record<string, unknown> = {};
     if (patch.status) apiPatch["status"] = patch.status;
     if (patch.driver !== undefined) apiPatch["driver"] = patch.driver;

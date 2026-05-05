@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -17,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LeafletMap } from "@/components/LeafletMap";
 import { useLocation } from "@/context/LocationContext";
 import { useAuth } from "@/context/AuthContext";
-import { formatPrice, RIDE_OPTIONS } from "@/data/mock";
+import { formatPrice } from "@/data/mock";
 import { useColors } from "@/hooks/useColors";
 import { api } from "@/utils/api";
 import type { Driver } from "@/types";
@@ -26,8 +27,12 @@ type PendingRide = {
   id: string;
   pickupLabel: string;
   pickupAddress: string;
+  pickupLat: number | null;
+  pickupLng: number | null;
   dropoffLabel: string;
   dropoffAddress: string;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
   distanceKm: number;
   priceCents: number;
   tier: string;
@@ -38,18 +43,34 @@ type ActiveRide = PendingRide & {
   status: "matched" | "arriving" | "in_progress";
 };
 
+const CANCEL_REASONS = [
+  "Passageiro não encontrado",
+  "Problema no veículo",
+  "Endereço incorreto",
+  "Emergência pessoal",
+  "Passageiro cancelou",
+  "Outro motivo",
+];
+
 export default function DriverHomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { coords } = useLocation();
+  const { coords, distanceMeters } = useLocation();
   const [online, setOnline] = useState(false);
   const [pendingRide, setPendingRide] = useState<PendingRide | null>(null);
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
   const [completedToday, setCompletedToday] = useState(0);
   const [earnedTodayCents, setEarnedTodayCents] = useState(0);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // For ride map: track current route target
+  const [routeBLat, setRouteBLat] = useState<number | null>(null);
+  const [routeBLng, setRouteBLng] = useState<number | null>(null);
+  const rideMapIframeRef = useRef<any>(null);
 
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 24) : insets.top + 8;
@@ -110,14 +131,35 @@ export default function DriverHomeScreen() {
       vehicleType: user.vehicleType ?? "car",
       lat: coords.latitude,
       lng: coords.longitude,
-      online,
+      online: true,
     }).catch(() => {});
-  }, [user, coords, online]);
+  }, [user, coords]);
+
+  // Update route A when driver moves during active ride
+  useEffect(() => {
+    if (!activeRide || !coords || !rideMapIframeRef.current) return;
+    const target = activeRide.status === "in_progress"
+      ? { lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }
+      : { lat: activeRide.pickupLat, lng: activeRide.pickupLng };
+    if (target.lat == null) return;
+    try {
+      rideMapIframeRef.current.contentWindow?.postMessage(
+        JSON.stringify({
+          type: "updateRoute",
+          aLat: coords.latitude, aLng: coords.longitude,
+          bLat: target.lat, bLng: target.lng,
+        }),
+        "*",
+      );
+    } catch {}
+  }, [coords?.latitude, coords?.longitude]);
 
   useEffect(() => {
     if (online && user?.id) {
       postLocation();
-      locationRef.current = setInterval(postLocation, 10000);
+      // Post location every 5s during active ride, 10s otherwise
+      const interval = activeRide ? 5000 : 10000;
+      locationRef.current = setInterval(postLocation, interval);
     } else {
       if (locationRef.current) { clearInterval(locationRef.current); locationRef.current = null; }
       if (user?.id) {
@@ -134,7 +176,7 @@ export default function DriverHomeScreen() {
     return () => {
       if (locationRef.current) { clearInterval(locationRef.current); locationRef.current = null; }
     };
-  }, [online, user?.id]);
+  }, [online, user?.id, !!activeRide]);
 
   const fetchPending = useCallback(async () => {
     if (!user?.vehicleType || activeRide) return;
@@ -146,8 +188,12 @@ export default function DriverHomeScreen() {
           id: String(r["_id"] ?? r["id"] ?? ""),
           pickupLabel: String(r["pickupLabel"] ?? ""),
           pickupAddress: String(r["pickupAddress"] ?? ""),
+          pickupLat: typeof r["pickupLat"] === "number" ? r["pickupLat"] : null,
+          pickupLng: typeof r["pickupLng"] === "number" ? r["pickupLng"] : null,
           dropoffLabel: String(r["dropoffLabel"] ?? ""),
           dropoffAddress: String(r["dropoffAddress"] ?? ""),
+          dropoffLat: typeof r["dropoffLat"] === "number" ? r["dropoffLat"] : null,
+          dropoffLng: typeof r["dropoffLng"] === "number" ? r["dropoffLng"] : null,
           distanceKm: typeof r["distanceKm"] === "number" ? r["distanceKm"] : 0,
           priceCents: typeof r["priceCents"] === "number" ? r["priceCents"] : 0,
           tier: String(r["tier"] ?? "car"),
@@ -204,7 +250,10 @@ export default function DriverHomeScreen() {
         driverId: user.id,
       });
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setActiveRide({ ...pendingRide, status: "matched" });
+      const ride = { ...pendingRide, status: "matched" as const };
+      setActiveRide(ride);
+      setRouteBLat(pendingRide.pickupLat);
+      setRouteBLng(pendingRide.pickupLng);
       setPendingRide(null);
     } catch {}
   };
@@ -216,32 +265,257 @@ export default function DriverHomeScreen() {
 
   const handleStatusAdvance = async () => {
     if (!activeRide) return;
-    const next: ActiveRide["status"] | "completed" =
-      activeRide.status === "matched" ? "arriving"
-      : activeRide.status === "arriving" ? "in_progress"
-      : "completed";
 
-    if (next === "completed") {
+    if (activeRide.status === "matched") {
+      // Chegou ao passageiro → arriving
+      try {
+        await api.updateRide(activeRide.id, { status: "arriving" });
+        setActiveRide({ ...activeRide, status: "arriving" });
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      } catch {}
+    } else if (activeRide.status === "arriving") {
+      // Passageiro a bordo → in_progress, route changes to destination
+      try {
+        await api.updateRide(activeRide.id, { status: "in_progress" });
+        setActiveRide({ ...activeRide, status: "in_progress" });
+        setRouteBLat(activeRide.dropoffLat);
+        setRouteBLng(activeRide.dropoffLng);
+        // Update the destination pin on map
+        if (rideMapIframeRef.current && activeRide.dropoffLat != null) {
+          try {
+            rideMapIframeRef.current.contentWindow?.postMessage(
+              JSON.stringify({ type: "setTap", lat: activeRide.dropoffLat, lng: activeRide.dropoffLng, color: "#0a0a0a", innerColor: "#00D26A" }),
+              "*",
+            );
+            rideMapIframeRef.current.contentWindow?.postMessage(
+              JSON.stringify({ type: "updateRoute", aLat: coords?.latitude, aLng: coords?.longitude, bLat: activeRide.dropoffLat, bLng: activeRide.dropoffLng }),
+              "*",
+            );
+          } catch {}
+        }
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      } catch {}
+    } else if (activeRide.status === "in_progress") {
+      // Finalizar corrida
       try {
         await api.updateRide(activeRide.id, { status: "completed", completedAt: Date.now() });
         setCompletedToday((c) => c + 1);
         setEarnedTodayCents((e) => e + activeRide.priceCents);
         setActiveRide(null);
+        setRouteBLat(null);
+        setRouteBLng(null);
         if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      } catch {}
-    } else {
-      try {
-        await api.updateRide(activeRide.id, { status: next });
-        setActiveRide({ ...activeRide, status: next });
-        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       } catch {}
     }
   };
 
+  const handleCancelRide = async () => {
+    if (!activeRide || !selectedReason) return;
+    try {
+      await api.updateRide(activeRide.id, { status: "cancelled", cancelReason: selectedReason, completedAt: Date.now() });
+      setActiveRide(null);
+      setRouteBLat(null);
+      setRouteBLng(null);
+      setCancelModalVisible(false);
+      setSelectedReason(null);
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    } catch {}
+  };
+
+  // Distance check for finalize button
+  const distToDestination = (() => {
+    if (!activeRide || activeRide.status !== "in_progress" || !coords) return Infinity;
+    if (activeRide.dropoffLat == null || activeRide.dropoffLng == null) return 0;
+    return distanceMeters(
+      { latitude: coords.latitude, longitude: coords.longitude },
+      { latitude: activeRide.dropoffLat, longitude: activeRide.dropoffLng },
+    );
+  })();
+
+  const canFinalize =
+    activeRide?.status === "in_progress" &&
+    (activeRide.dropoffLat == null || distToDestination <= 300);
+
+  const phaseLabel =
+    activeRide?.status === "matched" ? "Indo ao passageiro"
+    : activeRide?.status === "arriving" ? "Aguardando embarque"
+    : activeRide?.status === "in_progress" ? "Em viagem"
+    : "";
+
   const nextButtonLabel =
-    activeRide?.status === "matched" ? "A caminho do passageiro"
+    activeRide?.status === "matched" ? "Cheguei ao passageiro"
     : activeRide?.status === "arriving" ? "Passageiro a bordo"
-    : "Finalizar corrida";
+    : canFinalize ? "Finalizar corrida"
+    : "Chegue ao destino para finalizar";
+
+  const nextButtonIcon =
+    activeRide?.status === "matched" ? "map-pin"
+    : activeRide?.status === "arriving" ? "user-check"
+    : "check-circle";
+
+  // Ride map props: driver's own GPS as the moving car
+  const rideMapLat = coords?.latitude ?? -16.0028;
+  const rideMapLng = coords?.longitude ?? -49.7903;
+
+  if (activeRide) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        {/* Full-screen map */}
+        <View style={styles.rideMapWrap}>
+          <LeafletMap
+            key={activeRide.id}
+            height={null}
+            lat={rideMapLat}
+            lng={rideMapLng}
+            showAsVehicle={true}
+            vehicleType={user?.vehicleType ?? "car"}
+            destLat={activeRide.status === "in_progress" ? (activeRide.dropoffLat ?? undefined) : (activeRide.pickupLat ?? undefined)}
+            destLng={activeRide.status === "in_progress" ? (activeRide.dropoffLng ?? undefined) : (activeRide.pickupLng ?? undefined)}
+            routeALat={rideMapLat}
+            routeALng={rideMapLng}
+            routeBLat={routeBLat}
+            routeBLng={routeBLng}
+            interactive={false}
+          />
+          {/* Store reference to iframe for imperative postMessages */}
+          <IframeCapture onCapture={(el) => { rideMapIframeRef.current = el; }} />
+
+          {/* Phase overlay */}
+          <View style={[styles.phaseOverlay, { top: insets.top + 12, backgroundColor: colors.background }]}>
+            <View style={[styles.phaseDot, { backgroundColor: colors.accent }]} />
+            <Text style={[styles.phaseOverlayTxt, { color: colors.foreground }]}>{phaseLabel}</Text>
+          </View>
+
+          {/* Earnings overlay */}
+          <View style={[styles.earningsOverlay, { top: insets.top + 12, backgroundColor: colors.foreground }]}>
+            <Text style={[styles.earningsOverlayTxt, { color: colors.background }]}>{formatPrice(activeRide.priceCents)}</Text>
+          </View>
+        </View>
+
+        {/* Bottom panel */}
+        <View style={[styles.rideBottomPanel, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 16 }]}>
+          <View style={[styles.rideHandle, { backgroundColor: colors.border }]} />
+
+          {/* Route summary */}
+          <View style={[styles.routeRow, { borderColor: colors.border }]}>
+            <View style={styles.routeIconCol}>
+              <View style={[styles.dot, { backgroundColor: colors.accent }]} />
+              <View style={[styles.routeDivider, { backgroundColor: colors.border }]} />
+              <View style={[styles.square, { backgroundColor: colors.foreground }]} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.routeLabel, { color: colors.foreground }]} numberOfLines={1}>{activeRide.pickupLabel}</Text>
+              <Text style={[styles.routeSub, { color: colors.mutedForeground }]} numberOfLines={1}>{activeRide.pickupAddress}</Text>
+              <View style={{ height: 12 }} />
+              <Text style={[styles.routeLabel, { color: colors.foreground }]} numberOfLines={1}>{activeRide.dropoffLabel}</Text>
+              <Text style={[styles.routeSub, { color: colors.mutedForeground }]} numberOfLines={1}>{activeRide.dropoffAddress}</Text>
+            </View>
+            <Text style={[styles.distTxt, { color: colors.mutedForeground }]}>{activeRide.distanceKm.toFixed(1).replace(".", ",")} km</Text>
+          </View>
+
+          {/* Distance to destination indicator when in progress */}
+          {activeRide.status === "in_progress" && activeRide.dropoffLat != null && (
+            <View style={[styles.distBar, { backgroundColor: colors.muted }]}>
+              <Feather name="navigation" size={12} color={canFinalize ? colors.accent : colors.mutedForeground} />
+              <Text style={[styles.distBarTxt, { color: canFinalize ? colors.accent : colors.mutedForeground }]}>
+                {canFinalize
+                  ? "Você chegou ao destino!"
+                  : `${Math.round(distToDestination)}m até o destino`}
+              </Text>
+            </View>
+          )}
+
+          {/* Action button */}
+          <Pressable
+            onPress={handleStatusAdvance}
+            disabled={activeRide.status === "in_progress" && !canFinalize}
+            style={({ pressed }) => [
+              styles.actionBtn,
+              {
+                backgroundColor: (activeRide.status === "in_progress" && !canFinalize) ? colors.muted : colors.accent,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Feather name={nextButtonIcon as any} size={18} color={(activeRide.status === "in_progress" && !canFinalize) ? colors.mutedForeground : colors.accentForeground} />
+            <Text style={[styles.actionBtnTxt, { color: (activeRide.status === "in_progress" && !canFinalize) ? colors.mutedForeground : colors.accentForeground }]}>
+              {nextButtonLabel}
+            </Text>
+          </Pressable>
+
+          {/* Cancel button */}
+          <Pressable
+            onPress={() => { setSelectedReason(null); setCancelModalVisible(true); }}
+            style={({ pressed }) => [styles.cancelBtn, { opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Feather name="x-circle" size={14} color={colors.mutedForeground} />
+            <Text style={[styles.cancelBtnTxt, { color: colors.mutedForeground }]}>Cancelar corrida</Text>
+          </Pressable>
+        </View>
+
+        {/* Cancel reason modal */}
+        <Modal
+          visible={cancelModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setCancelModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalSheet, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Motivo do cancelamento</Text>
+              <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>Selecione o motivo para prosseguir</Text>
+
+              <View style={styles.reasonList}>
+                {CANCEL_REASONS.map((reason) => (
+                  <Pressable
+                    key={reason}
+                    onPress={() => setSelectedReason(reason)}
+                    style={({ pressed }) => [
+                      styles.reasonBtn,
+                      {
+                        backgroundColor: selectedReason === reason ? colors.accent : colors.card,
+                        borderColor: selectedReason === reason ? colors.accent : colors.border,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.reasonRadio, { borderColor: selectedReason === reason ? colors.accentForeground : colors.mutedForeground }]}>
+                      {selectedReason === reason && <View style={[styles.reasonRadioInner, { backgroundColor: colors.accentForeground }]} />}
+                    </View>
+                    <Text style={[styles.reasonTxt, { color: selectedReason === reason ? colors.accentForeground : colors.foreground }]}>
+                      {reason}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={styles.modalActions}>
+                <Pressable
+                  onPress={() => setCancelModalVisible(false)}
+                  style={({ pressed }) => [styles.modalSecBtn, { backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <Text style={[styles.modalSecBtnTxt, { color: colors.foreground }]}>Voltar</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleCancelRide}
+                  disabled={!selectedReason}
+                  style={({ pressed }) => [
+                    styles.modalPriBtn,
+                    { backgroundColor: selectedReason ? "#EF4444" : colors.muted, opacity: pressed ? 0.8 : 1 },
+                  ]}
+                >
+                  <Text style={[styles.modalPriBtnTxt, { color: selectedReason ? "#fff" : colors.mutedForeground }]}>
+                    Confirmar cancelamento
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -282,11 +556,11 @@ export default function DriverHomeScreen() {
         <View style={[styles.toggleCard, { backgroundColor: colors.foreground }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.toggleTitle, { color: colors.background }]}>
-              {online ? (activeRide ? "Corrida em andamento" : "Aceitando corridas") : "Você está offline"}
+              {online ? "Aceitando corridas" : "Você está offline"}
             </Text>
             <Text style={[styles.toggleSub, { color: colors.background, opacity: 0.7 }]}>
               {online
-                ? activeRide ? `${activeRide.dropoffLabel}` : "Aguarde uma solicitação por perto"
+                ? "Aguarde uma solicitação por perto"
                 : "Ative para começar a receber corridas"}
             </Text>
           </View>
@@ -303,47 +577,7 @@ export default function DriverHomeScreen() {
           <StatBlock label="Corridas" value={completedToday.toString()} icon="check-circle" />
         </View>
 
-        {activeRide && (
-          <View style={[styles.requestCard, { backgroundColor: colors.card, borderColor: colors.accent }]}>
-            <View style={styles.requestHeader}>
-              <View style={[styles.requestBadge, { backgroundColor: colors.accent }]}>
-                <Feather name="navigation" size={12} color={colors.accentForeground} />
-                <Text style={[styles.requestBadgeTxt, { color: colors.accentForeground }]}>
-                  {activeRide.status === "matched" ? "Aceita" : activeRide.status === "arriving" ? "A caminho" : "Em viagem"}
-                </Text>
-              </View>
-              <Text style={[styles.requestPrice, { color: colors.foreground }]}>{formatPrice(activeRide.priceCents)}</Text>
-            </View>
-
-            <View style={styles.routeBlock}>
-              <View style={styles.routeIconCol}>
-                <View style={[styles.dot, { backgroundColor: colors.accent }]} />
-                <View style={[styles.routeLine, { backgroundColor: colors.border }]} />
-                <View style={[styles.square, { backgroundColor: colors.foreground }]} />
-              </View>
-              <View style={{ flex: 1, gap: 14 }}>
-                <View>
-                  <Text style={[styles.routeLabel, { color: colors.foreground }]}>Embarque</Text>
-                  <Text style={[styles.routeSub, { color: colors.mutedForeground }]} numberOfLines={1}>{activeRide.pickupAddress}</Text>
-                </View>
-                <View>
-                  <Text style={[styles.routeLabel, { color: colors.foreground }]}>Destino</Text>
-                  <Text style={[styles.routeSub, { color: colors.mutedForeground }]} numberOfLines={1}>{activeRide.dropoffAddress}</Text>
-                </View>
-              </View>
-            </View>
-
-            <Pressable
-              onPress={handleStatusAdvance}
-              style={({ pressed }) => [styles.fullBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}
-            >
-              <Feather name={activeRide.status === "in_progress" ? "check" : "navigation"} size={18} color={colors.accentForeground} />
-              <Text style={[styles.fullBtnTxt, { color: colors.accentForeground }]}>{nextButtonLabel}</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {!activeRide && pendingRide && (
+        {pendingRide && (
           <View style={[styles.requestCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.requestHeader}>
               <View style={[styles.requestBadge, { backgroundColor: colors.foreground }]}>
@@ -356,7 +590,7 @@ export default function DriverHomeScreen() {
             <View style={styles.routeBlock}>
               <View style={styles.routeIconCol}>
                 <View style={[styles.dot, { backgroundColor: colors.accent }]} />
-                <View style={[styles.routeLine, { backgroundColor: colors.border }]} />
+                <View style={[styles.routeDivider, { backgroundColor: colors.border }]} />
                 <View style={[styles.square, { backgroundColor: colors.foreground }]} />
               </View>
               <View style={{ flex: 1, gap: 14 }}>
@@ -371,7 +605,7 @@ export default function DriverHomeScreen() {
               </View>
             </View>
 
-            <View style={styles.actions}>
+            <View style={styles.twoActions}>
               <Pressable onPress={handleReject} style={({ pressed }) => [styles.secondaryBtn, { backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1 }]}>
                 <Text style={[styles.secondaryBtnTxt, { color: colors.foreground }]}>Recusar</Text>
               </Pressable>
@@ -383,7 +617,7 @@ export default function DriverHomeScreen() {
           </View>
         )}
 
-        {!activeRide && !pendingRide && online && (
+        {!pendingRide && online && (
           <View style={[styles.waiting, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={[styles.waitingIcon, { backgroundColor: colors.muted }]}>
               <Feather name="search" size={20} color={colors.foreground} />
@@ -397,6 +631,18 @@ export default function DriverHomeScreen() {
       </ScrollView>
     </View>
   );
+}
+
+// Helper component to capture iframe ref from LeafletMap's rendered iframe
+function IframeCapture({ onCapture }: { onCapture: (el: HTMLIFrameElement | null) => void }) {
+  useEffect(() => {
+    // Find the most recently rendered iframe (the ride map iframe)
+    const iframes = document.querySelectorAll("iframe[title='Mapa']");
+    const last = iframes[iframes.length - 1] as HTMLIFrameElement | null;
+    onCapture(last ?? null);
+    return () => onCapture(null);
+  }, [onCapture]);
+  return null;
 }
 
 type StatBlockProps = {
@@ -419,6 +665,7 @@ function StatBlock({ label, value, icon, accent }: StatBlockProps) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  // Idle view
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   greet: { fontSize: 14, fontFamily: "Inter_500Medium" },
   name: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
@@ -445,18 +692,49 @@ const styles = StyleSheet.create({
   routeIconCol: { alignItems: "center", paddingTop: 4 },
   dot: { width: 12, height: 12, borderRadius: 6 },
   square: { width: 12, height: 12, borderRadius: 3 },
-  routeLine: { width: 2, flex: 1, marginVertical: 4, minHeight: 22 },
+  routeDivider: { width: 2, flex: 1, marginVertical: 4, minHeight: 22 },
   routeLabel: { fontSize: 14, fontFamily: "Inter_700Bold" },
   routeSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  actions: { flexDirection: "row", gap: 10 },
+  twoActions: { flexDirection: "row", gap: 10 },
   primaryBtn: { flex: 1.4, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14, borderRadius: 14 },
   primaryBtnTxt: { fontSize: 15, fontFamily: "Inter_700Bold" },
   secondaryBtn: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 14 },
   secondaryBtnTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  fullBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 14 },
-  fullBtnTxt: { fontSize: 15, fontFamily: "Inter_700Bold" },
   waiting: { marginHorizontal: 20, marginTop: 18, padding: 16, borderRadius: 18, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 14 },
   waitingIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   waitingTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
   waitingSub: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 2 },
+  // Active ride view
+  rideMapWrap: { flex: 1, position: "relative" },
+  phaseOverlay: { position: "absolute", left: 16, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
+  phaseDot: { width: 8, height: 8, borderRadius: 4 },
+  phaseOverlayTxt: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  earningsOverlay: { position: "absolute", right: 16, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
+  earningsOverlayTxt: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  rideBottomPanel: { borderTopWidth: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 8, gap: 12 },
+  rideHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginBottom: 4 },
+  routeRow: { flexDirection: "row", gap: 14, paddingVertical: 12, borderBottomWidth: 1 },
+  distTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold", alignSelf: "center" },
+  distBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  distBarTxt: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16 },
+  actionBtnTxt: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  cancelBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 8 },
+  cancelBtnTxt: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  // Cancel modal
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
+  modalSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 36, gap: 12 },
+  modalHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginBottom: 8 },
+  modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
+  modalSub: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  reasonList: { gap: 10, marginTop: 4 },
+  reasonBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1.5 },
+  reasonRadio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  reasonRadioInner: { width: 10, height: 10, borderRadius: 5 },
+  reasonTxt: { fontSize: 14, fontFamily: "Inter_600SemiBold", flex: 1 },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 8 },
+  modalSecBtn: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 14 },
+  modalSecBtnTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  modalPriBtn: { flex: 2, alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 14 },
+  modalPriBtnTxt: { fontSize: 15, fontFamily: "Inter_700Bold" },
 });

@@ -27,6 +27,8 @@ A ride-hailing (rideshare) app for Brazil: Expo mobile + web frontend for passen
 - `artifacts/rideshare/app/` — Expo Router screens
 - `artifacts/rideshare/context/` — React contexts (Auth, Location, Ride, Notification)
 - `artifacts/rideshare/utils/api.ts` — API client (uses `/api` relative on web)
+- `artifacts/rideshare/components/LeafletMap.web.tsx` — Web Leaflet map (iframe-based)
+- `artifacts/rideshare/components/LeafletMap.tsx` — Native Leaflet map (WebView-based)
 - `lib/db/src/` — Mongoose models and `connectDB()`
 - `lib/db/src/models/` — User, Ride, Payment, Withdrawal, Coupon, PaymentSettings
 
@@ -36,12 +38,13 @@ A ride-hailing (rideshare) app for Brazil: Expo mobile + web frontend for passen
 - `MONGODB_URI` is stored as a Replit secret (not plaintext); `MONGODB_DB` and `PORT` are shared env vars
 - Auth is custom (email+password with hashed storage in MongoDB) — no external auth provider
 - Payments use Stripe (card) + Mercado Pago (Pix QR code); keys stored per-deployment in MongoDB's `paymentSettings` collection via admin panel
-- Driver online tracking uses an in-memory store on the API server with 30s TTL (not persisted)
+- Driver online tracking uses an in-memory store on the API server with 60s TTL (not persisted)
+- LeafletMap uses `useMemo` + `useRef` for initial HTML to prevent iframe reloads on position updates; all subsequent position changes go via postMessage (`updateLocation`, `updateDriverCar`, `updateRoute`, `setTap`, `updateDriverMarkers`)
 
 ## Product
 
-- **Passengers**: Request rides, track in real time, pay via Pix/card/cash, apply coupons
-- **Drivers**: Go online/offline, accept rides, track earnings, request Pix withdrawals
+- **Passengers**: Request rides, track driver in real time on Waze-style map (car moving towards them → car moving to destination), pay via Pix/card/cash, apply coupons
+- **Drivers**: Go online/offline, accept rides, navigate to passenger (phase 1: matched → "Cheguei"), embark passenger (phase 2: arriving → "Passageiro a bordo"), drive to destination (phase 3: in_progress → "Finalizar" only active within 300m of destination), cancel with reason selection
 - **Admin**: Approve/reject driver registrations, view all rides, manage withdrawals, configure payment settings (Stripe keys, Pix key, pricing), view live driver map
 
 ## User preferences
@@ -58,12 +61,20 @@ A ride-hailing (rideshare) app for Brazil: Expo mobile + web frontend for passen
 - **Frontend**: `artifacts/rideshare/hooks/usePushNotifications.ts` — registers on native only (web stays with in-app toasts), activated via `<PushTokenRegistrar />` in `_layout.tsx`
 - Push tokens stored in `pushToken` field on the `usuarios` MongoDB collection
 
+## Live Ride Tracking
+
+- **Driver location API**: `POST /api/drivers/location` (posts every 5s during active ride, 10s otherwise), `GET /api/drivers/online` (admin), `GET /api/drivers/:id/location` (passenger polls specific driver)
+- **Passenger polling**: polls driver location every 5s when ride is `arriving` or `in_progress`
+- **Map props for tracking**: `driverCarLat/Lng` (secondary moving car marker), `routeALat/Lng/routeBLat/Lng` (updatable dashed route line)
+- **Finalize gate**: "Finalizar corrida" button only active when driver is within 300m of dropoff coordinates (or if no coords stored)
+- **Cancel with reason**: driver can cancel with one of 6 pre-set reasons; `cancelReason` stored in MongoDB
+
 ## Gotchas
 
 - The app shows a location permission gate before login on web (expected behavior — dismiss or navigate to /login directly)
-- Mongoose logs duplicate index warnings for User model on startup — harmless, can be fixed by removing duplicate `index: true` declarations in the User schema
-- `REPLIT_EXPO_DEV_DOMAIN` is used for the Expo packager proxy URL in the dev script
+- Mongoose logs duplicate index warnings for User model on startup — harmless
 - Push notifications only work on real native devices (iOS/Android) — Expo Go or a dev build; web uses in-app toasts instead
+- The `artifacts/api-server: API Server` workflow is a duplicate created by deployment and will always fail with EADDRINUSE — use the canonical "API Server" workflow only
 
 ## Pointers
 

@@ -66,8 +66,12 @@ const rideSchema = z.object({
   userId: z.string(),
   pickupLabel: z.string(),
   pickupAddress: z.string(),
+  pickupLat: z.number().optional().nullable(),
+  pickupLng: z.number().optional().nullable(),
   dropoffLabel: z.string(),
   dropoffAddress: z.string(),
+  dropoffLat: z.number().optional().nullable(),
+  dropoffLng: z.number().optional().nullable(),
   tier: z.string(),
   tierName: z.string(),
   priceCents: z.number().int(),
@@ -92,8 +96,12 @@ router.post("/", async (req, res) => {
         userId: parsed.data.userId,
         pickupLabel: parsed.data.pickupLabel,
         pickupAddress: parsed.data.pickupAddress,
+        pickupLat: parsed.data.pickupLat ?? null,
+        pickupLng: parsed.data.pickupLng ?? null,
         dropoffLabel: parsed.data.dropoffLabel,
         dropoffAddress: parsed.data.dropoffAddress,
+        dropoffLat: parsed.data.dropoffLat ?? null,
+        dropoffLng: parsed.data.dropoffLng ?? null,
         tier: parsed.data.tier,
         tierName: parsed.data.tierName,
         priceCents: parsed.data.priceCents,
@@ -121,6 +129,7 @@ const patchSchema = z.object({
   completedAt: z.number().optional(),
   pixPaymentStatus: z.string().optional(),
   mpPaymentId: z.string().optional(),
+  cancelReason: z.string().optional().nullable(),
 });
 
 router.patch("/:id", async (req, res) => {
@@ -136,6 +145,7 @@ router.patch("/:id", async (req, res) => {
       set["completedAt"] = new Date(parsed.data.completedAt);
     if (parsed.data.pixPaymentStatus !== undefined) set["pixPaymentStatus"] = parsed.data.pixPaymentStatus;
     if (parsed.data.mpPaymentId !== undefined) set["mpPaymentId"] = parsed.data.mpPaymentId;
+    if (parsed.data.cancelReason !== undefined) set["cancelReason"] = parsed.data.cancelReason;
 
     const ride = await RideModel.findByIdAndUpdate(req.params.id, { $set: set }, { new: false }).lean();
 
@@ -161,12 +171,12 @@ router.patch("/:id", async (req, res) => {
           sendPushToUser(userId, "Corrida cancelada", "Sua corrida foi cancelada.", { rideId: req.params.id }).catch(() => {});
         }
         if (driverId) {
-          sendPushToUser(driverId, "Corrida cancelada", "A corrida foi cancelada pelo passageiro.", { rideId: req.params.id }).catch(() => {});
+          sendPushToUser(driverId, "Corrida cancelada", "A corrida foi cancelada.", { rideId: req.params.id }).catch(() => {});
         }
       }
     }
 
-    // Reembolso automático quando motorista cancela e há pagamento Stripe registrado
+    // Auto-refund via Stripe when cancelled
     if (parsed.data.status === "cancelled" && ride) {
       const intentId = (ride as any).stripePaymentIntentId;
       if (intentId) {
@@ -186,7 +196,6 @@ router.patch("/:id", async (req, res) => {
           }
         } catch (refundErr) {
           req.log.error({ err: refundErr, rideId: req.params.id }, "Erro ao processar reembolso automático");
-          // Não bloqueia a atualização do status
         }
       }
     }

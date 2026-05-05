@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 
 type DriverMarker = {
@@ -26,6 +26,14 @@ type Props = {
   showAsVehicle?: boolean;
   driverMarkers?: DriverMarker[];
   adminMode?: boolean;
+  // Live ride tracking props
+  driverCarLat?: number | null;
+  driverCarLng?: number | null;
+  driverCarVehicleType?: "moto" | "car";
+  routeALat?: number | null;
+  routeALng?: number | null;
+  routeBLat?: number | null;
+  routeBLng?: number | null;
 };
 
 let _nextId = 1;
@@ -34,7 +42,7 @@ function vehicleIconHtml(type: string, color: string = "#00D26A"): string {
   if (type === "moto") {
     return `<div style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;background:${color};border:3px solid white;border-radius:50%;box-shadow:0 3px 14px rgba(0,0,0,0.35)"><svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='white'><path d='M5 15a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm14 0a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-9.5-1h5l2-4h-3.5L11 8.5H8L6.5 12H4l-1.5 3H5a4 4 0 0 1 4-4zM19 12l-1-4h-2l1 4h2z'/></svg></div>`;
   }
-  return `<div style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;background:${color};border:3px solid white;border-radius:50%;box-shadow:0 3px 14px rgba(0,0,0,0.35)"><svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='white'><path d='M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z'/></svg></div>`;
+  return `<div style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;background:${color};border:3px solid white;border-radius:50%;box-shadow:0 3px 14px rgba(0,0,0,0.35)"><svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='white'><path d='M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.01 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z'/></svg></div>`;
 }
 
 function buildHtml(
@@ -52,6 +60,13 @@ function buildHtml(
   showAsVehicle?: boolean,
   driverMarkers?: DriverMarker[],
   adminMode?: boolean,
+  driverCarLat?: number | null,
+  driverCarLng?: number | null,
+  driverCarVehicleType?: string,
+  routeALat?: number | null,
+  routeALng?: number | null,
+  routeBLat?: number | null,
+  routeBLng?: number | null,
 ): string {
   const isPickup = mode === "pickup";
   const tapPinColor = isPickup ? "#00D26A" : "#0a0a0a";
@@ -114,9 +129,23 @@ function buildHtml(
       }).join("\n")
     : "";
 
-  const adminLayer = adminMode ? `
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-  ` : "";
+  // Driver car marker (secondary, for passenger view)
+  const hasInitDriverCar = driverCarLat != null && driverCarLng != null;
+  const driverCarIconHtml = vehicleIconHtml(driverCarVehicleType ?? "car", "#00D26A");
+  const driverCarInit = hasInitDriverCar
+    ? `
+  (function(){
+    var _dcHtml = '${driverCarIconHtml.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "")}';
+    var _dcIcon = L.divIcon({html:_dcHtml, className:'', iconSize:[38,38], iconAnchor:[19,19]});
+    _driverCar = L.marker([${driverCarLat},${driverCarLng}], {icon:_dcIcon, zIndexOffset:1001}).addTo(map);
+  })();`
+    : "";
+
+  // Initial live route
+  const hasInitRoute = routeALat != null && routeALng != null && routeBLat != null && routeBLng != null;
+  const initLiveRoute = hasInitRoute
+    ? `_drawRoute(${routeALat},${routeALng},${routeBLat},${routeBLng});`
+    : "";
 
   return `<!DOCTYPE html>
 <html><head>
@@ -143,9 +172,22 @@ var locIcon=L.divIcon({
 });
 var locMarker=L.marker([${lat},${lng}],{icon:locIcon,zIndexOffset:999}).addTo(map);
 var tapMarker=null;
+var _driverCar=null;
+var _liveRoute=null;
+
+function _drawRoute(aLat,aLng,bLat,bLng){
+  if(_liveRoute){map.removeLayer(_liveRoute);_liveRoute=null;}
+  if(aLat!=null&&bLat!=null){
+    _liveRoute=L.polyline([[aLat,aLng],[bLat,bLng]],{color:'#00D26A',weight:5,opacity:0.85,dashArray:'10,7'}).addTo(map);
+    try{map.fitBounds([[aLat,aLng],[bLat,bLng]],{padding:[70,70],maxZoom:17});}catch(e){}
+  }
+}
+
 ${originInit}
 ${destInit}
 ${driverMarkersInit}
+${driverCarInit}
+${initLiveRoute}
 ${clickHandler}
 
 window.addEventListener('message',function(e){
@@ -155,23 +197,39 @@ window.addEventListener('message',function(e){
     if(d.mapId!=null && d.mapId!==MAP_ID) return;
     if(d.type==='updateLocation'){
       locMarker.setLatLng([d.lat,d.lng]);
-      if(d.pan) map.setView([d.lat,d.lng],d.zoom||16,{animate:true});
+      if(d.pan) map.panTo([d.lat,d.lng],{animate:true,duration:1.5});
+    }
+    if(d.type==='updateDriverCar'){
+      if(_driverCar){
+        _driverCar.setLatLng([d.lat,d.lng]);
+      } else {
+        var isMoto=(d.vehicleType==='moto');
+        var svgPath=isMoto?'<path d="M5 15a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm14 0a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-9.5-1h5l2-4h-3.5L11 8.5H8L6.5 12H4l-1.5 3H5a4 4 0 0 1 4-4zM19 12l-1-4h-2l1 4h2z"/>':'<path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.01 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>';
+        var dcHtml='<div style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;background:#00D26A;border:3px solid white;border-radius:50%;box-shadow:0 3px 14px rgba(0,0,0,0.35)"><svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'20\\' height=\\'20\\' viewBox=\\'0 0 24 24\\' fill=\\'white\\'>'+svgPath+'</svg></div>';
+        var dcIcon=L.divIcon({html:dcHtml,className:'',iconSize:[38,38],iconAnchor:[19,19]});
+        _driverCar=L.marker([d.lat,d.lng],{icon:dcIcon,zIndexOffset:1001}).addTo(map);
+      }
+    }
+    if(d.type==='updateRoute'){
+      _drawRoute(d.aLat,d.aLng,d.bLat,d.bLng);
     }
     if(d.type==='setTap'){
       if(tapMarker) map.removeLayer(tapMarker);
+      tapMarker=null;
       if(d.lat!=null){
-        var ti2=L.divIcon({html:'<div style="width:32px;height:32px;background:${tapPinColor};border:3px solid white;border-radius:50%;box-shadow:0 3px 14px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center"><div style="width:11px;height:11px;background:${tapPinInner};border-radius:50%"></div></div>',className:'',iconSize:[32,32],iconAnchor:[16,16]});
+        var pinColor=d.color||'${tapPinColor}';
+        var pinInner=d.innerColor||'${tapPinInner}';
+        var ti2=L.divIcon({html:'<div style="width:32px;height:32px;background:'+pinColor+';border:3px solid white;border-radius:50%;box-shadow:0 3px 14px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center"><div style="width:11px;height:11px;background:'+pinInner+';border-radius:50%"></div></div>',className:'',iconSize:[32,32],iconAnchor:[16,16]});
         tapMarker=L.marker([d.lat,d.lng],{icon:ti2,zIndexOffset:1000}).addTo(map);
       }
     }
     if(d.type==='updateDriverMarkers'){
-      // Remove old driver markers and re-add
       if(window._driverMarkers){window._driverMarkers.forEach(function(m){map.removeLayer(m)});}
       window._driverMarkers=[];
       (d.drivers||[]).forEach(function(dm){
         var isMoto=dm.vehicleType==='moto';
         var color=isMoto?'#7C3AED':'#2563EB';
-        var svgCar='<path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>';
+        var svgCar='<path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.01 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>';
         var svgMoto='<path d="M5 15a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm14 0a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-9.5-1h5l2-4h-3.5L11 8.5H8L6.5 12H4l-1.5 3H5a4 4 0 0 1 4-4zM19 12l-1-4h-2l1 4h2z"/>';
         var svgPath=isMoto?svgMoto:svgCar;
         var html='<div style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;background:'+color+';border:3px solid white;border-radius:50%;box-shadow:0 3px 14px rgba(0,0,0,0.35)"><svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'20\\' height=\\'20\\' viewBox=\\'0 0 24 24\\' fill=\\'white\\'>'+svgPath+'</svg></div>';
@@ -203,12 +261,61 @@ export function LeafletMap({
   showAsVehicle = false,
   driverMarkers,
   adminMode = false,
+  driverCarLat,
+  driverCarLng,
+  driverCarVehicleType = "car",
+  routeALat,
+  routeALng,
+  routeBLat,
+  routeBLng,
 }: Props) {
   const mapId = useRef(_nextId++).current;
   const iframeRef = useRef<any>(null);
-  const prevCoords = useRef({ lat, lng });
-  const prevDriverMarkers = useRef<DriverMarker[] | undefined>(undefined);
 
+  // Capture initial values via refs so HTML is built only once (prevents iframe reloads)
+  const initRef = useRef({
+    lat, lng,
+    driverCarLat: driverCarLat ?? null,
+    driverCarLng: driverCarLng ?? null,
+    driverCarVehicleType: driverCarVehicleType ?? "car",
+    routeALat: routeALat ?? null,
+    routeALng: routeALng ?? null,
+    routeBLat: routeBLat ?? null,
+    routeBLng: routeBLng ?? null,
+  });
+
+  const prevCoordsRef = useRef({ lat, lng });
+  const prevDriverCarRef = useRef({ lat: driverCarLat, lng: driverCarLng });
+  const prevRouteRef = useRef({ aLat: routeALat, aLng: routeALng, bLat: routeBLat, bLng: routeBLng });
+  const prevDriverMarkersRef = useRef<DriverMarker[] | undefined>(undefined);
+
+  // Build HTML once using initial values (stable srcDoc prevents iframe reloads)
+  const html = useMemo(() => buildHtml(
+    mapId,
+    initRef.current.lat,
+    initRef.current.lng,
+    interactive,
+    mode,
+    destLat,
+    destLng,
+    originLat,
+    originLng,
+    showRoute,
+    vehicleType,
+    showAsVehicle,
+    driverMarkers,
+    adminMode,
+    initRef.current.driverCarLat,
+    initRef.current.driverCarLng,
+    initRef.current.driverCarVehicleType,
+    initRef.current.routeALat,
+    initRef.current.routeALng,
+    initRef.current.routeBLat,
+    initRef.current.routeBLng,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [mapId]);
+
+  // Listen for tap events
   useEffect(() => {
     if (!onTap) return;
     const handler = (e: MessageEvent) => {
@@ -223,10 +330,11 @@ export function LeafletMap({
     return () => window.removeEventListener("message", handler);
   }, [onTap, mapId]);
 
+  // Update locMarker position via postMessage
   useEffect(() => {
-    const prev = prevCoords.current;
+    const prev = prevCoordsRef.current;
     if (lat === prev.lat && lng === prev.lng) return;
-    prevCoords.current = { lat, lng };
+    prevCoordsRef.current = { lat, lng };
     try {
       iframeRef.current?.contentWindow?.postMessage(
         JSON.stringify({ type: "updateLocation", mapId, lat, lng, pan: true, zoom }),
@@ -235,12 +343,44 @@ export function LeafletMap({
     } catch {}
   }, [lat, lng, zoom, mapId]);
 
+  // Update driver car marker via postMessage
+  useEffect(() => {
+    if (driverCarLat == null || driverCarLng == null) return;
+    const prev = prevDriverCarRef.current;
+    if (prev.lat === driverCarLat && prev.lng === driverCarLng) return;
+    prevDriverCarRef.current = { lat: driverCarLat, lng: driverCarLng };
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ type: "updateDriverCar", mapId, lat: driverCarLat, lng: driverCarLng, vehicleType: driverCarVehicleType }),
+        "*",
+      );
+    } catch {}
+  }, [driverCarLat, driverCarLng, driverCarVehicleType, mapId]);
+
+  // Update live route via postMessage
+  useEffect(() => {
+    const prev = prevRouteRef.current;
+    const changed =
+      prev.aLat !== routeALat || prev.aLng !== routeALng ||
+      prev.bLat !== routeBLat || prev.bLng !== routeBLng;
+    if (!changed) return;
+    if (routeALat == null || routeBLat == null) return;
+    prevRouteRef.current = { aLat: routeALat, aLng: routeALng, bLat: routeBLat, bLng: routeBLng };
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ type: "updateRoute", mapId, aLat: routeALat, aLng: routeALng, bLat: routeBLat, bLng: routeBLng }),
+        "*",
+      );
+    } catch {}
+  }, [routeALat, routeALng, routeBLat, routeBLng, mapId]);
+
+  // Update driver markers (admin map)
   useEffect(() => {
     if (!driverMarkers) return;
-    const prev = prevDriverMarkers.current;
+    const prev = prevDriverMarkersRef.current;
     const same = prev && JSON.stringify(prev) === JSON.stringify(driverMarkers);
     if (same) return;
-    prevDriverMarkers.current = driverMarkers;
+    prevDriverMarkersRef.current = driverMarkers;
     try {
       iframeRef.current?.contentWindow?.postMessage(
         JSON.stringify({ type: "updateDriverMarkers", mapId, drivers: driverMarkers }),
@@ -248,12 +388,6 @@ export function LeafletMap({
       );
     } catch {}
   }, [driverMarkers, mapId]);
-
-  const html = buildHtml(
-    mapId, lat, lng, interactive, mode,
-    destLat, destLng, originLat, originLng, showRoute,
-    vehicleType, showAsVehicle, driverMarkers, adminMode,
-  );
 
   const containerStyle = height != null
     ? [styles.wrap, { height }]
@@ -270,6 +404,13 @@ export function LeafletMap({
       />
     </View>
   );
+}
+
+// Expose a way for parent to send postMessages imperatively
+export function sendMapMessage(iframeEl: HTMLIFrameElement | null, mapId: number, msg: Record<string, unknown>) {
+  try {
+    iframeEl?.contentWindow?.postMessage(JSON.stringify({ ...msg, mapId }), "*");
+  } catch {}
 }
 
 const iframeStyle: React.CSSProperties = {

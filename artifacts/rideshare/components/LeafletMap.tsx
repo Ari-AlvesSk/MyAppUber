@@ -29,6 +29,14 @@ type Props = {
   showAsVehicle?: boolean;
   driverMarkers?: DriverMarker[];
   adminMode?: boolean;
+  // Live ride tracking props (used on web only; accepted here to share types)
+  driverCarLat?: number | null;
+  driverCarLng?: number | null;
+  driverCarVehicleType?: "moto" | "car";
+  routeALat?: number | null;
+  routeALng?: number | null;
+  routeBLat?: number | null;
+  routeBLng?: number | null;
 };
 
 function buildHtml(
@@ -151,6 +159,13 @@ export function LeafletMap({
   showAsVehicle: _showAsVehicle,
   driverMarkers: _driverMarkers,
   adminMode: _adminMode,
+  driverCarLat: _driverCarLat,
+  driverCarLng: _driverCarLng,
+  driverCarVehicleType: _driverCarVehicleType,
+  routeALat: _routeALat,
+  routeALng: _routeALng,
+  routeBLat: _routeBLat,
+  routeBLng: _routeBLng,
 }: Props) {
   const webViewRef = useRef<any>(null);
 

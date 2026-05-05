@@ -56,6 +56,16 @@ export type CouponItem = {
   createdAt: number;
 };
 
+export type DriverLocation = {
+  driverId: string;
+  driverName: string;
+  vehicleType: string;
+  lat: number;
+  lng: number;
+  online: boolean;
+  updatedAt: number;
+};
+
 export const api = {
   loginUser: (email: string, password: string) =>
     request<{ ok: boolean; user: Record<string, unknown> }>("/users/login", {
@@ -95,7 +105,9 @@ export const api = {
   postDriverLocation: (data: { driverId: string; driverName: string; vehicleType: string; lat: number; lng: number; online: boolean }) =>
     request<{ ok: boolean }>("/drivers/location", { method: "POST", body: JSON.stringify(data) }),
   getOnlineDrivers: () =>
-    request<{ driverId: string; driverName: string; vehicleType: string; lat: number; lng: number; online: boolean; updatedAt: number }[]>("/drivers/online"),
+    request<DriverLocation[]>("/drivers/online"),
+  getDriverLocation: (driverId: string) =>
+    request<DriverLocation>(`/drivers/${encodeURIComponent(driverId)}/location`),
 
   getCoupons: () => request<CouponItem[]>("/coupons"),
   createCoupon: (data: {
