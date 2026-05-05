@@ -28,11 +28,16 @@ pnpm workspace monorepo using TypeScript. Expo mobile rideshare app (pt-BR) with
 - `MONGODB_URI` — MongoDB Atlas connection string (shared env)
 - `MONGODB_DB` — Database name: `DbSistemaCaronaParaunaMobi` (shared env)
 
+## Replit Workflows
+
+- **API Server** — runs `pnpm --filter @workspace/api-server run dev` on port 8080 (console output)
+- **RideShare App** — runs Expo web on port 5000 (webview output); scan the QR code from the Replit URL bar to test on a physical device via Expo Go
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
-- `PORT=20619 pnpm --filter @workspace/rideshare run dev` — run Expo app
+- `pnpm --filter @workspace/api-server run dev` — run API server locally (requires PORT env var)
+- Restart workflows from the Replit UI after code changes
 
 ## Artifacts
 
