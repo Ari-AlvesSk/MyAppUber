@@ -1,0 +1,286 @@
+ReferenceError: Property 'document' doesn't exist
+
+This error is located at:
+    at b (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1868:691)
+    at Suspense (<anonymous>)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:801:383)
+    at s (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:810:3681)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:748:455)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:677:230)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:746:127)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:710:325)
+    at RNSScreenContentWrapper (<anonymous>)
+    at l (<anonymous>)
+    at u (<anonymous>)
+    at RNSScreen (<anonymous>)
+    at Animated(Anonymous) (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:418:466)
+    at t (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:916:329)
+    at Suspense (<anonymous>)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:916:119)
+    at c (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:915:296)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:913:894)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:913:4288)
+    at y (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:936:790)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:710:325)
+    at S (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:976:2450)
+    at RNSScreenStack (<anonymous>)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:933:400)
+    at G (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:932:831)
+    at RCTView (<anonymous>)
+    at View (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:296:1246)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:875:379)
+    at v (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:894:650)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:976:132)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:735:189)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:754:390)
+    at t (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:743:696)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:743:227)
+    at m (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:973:1240)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:800:1115)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:656:4509)
+    at A (<anonymous>)
+    at F (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1191:1796)
+    at I (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1191:886)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1711:188)
+    at KeyboardControllerView (<anonymous>)
+    at Animated(Anonymous) (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:418:466)
+    at AnimatedComponent(Animated(Anonymous)) (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1434:237)
+    at Animated(Anonymous) (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1434:605)
+    at T (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1677:1433)
+    at RCTView (<anonymous>)
+    at View (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:296:1246)
+    at o (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1601:330)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1174:186)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1185:265)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1156:180)
+    at o (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1241:804)
+    at s (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1709:360)
+    at RNCSafeAreaProvider (<anonymous>)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:867:477)
+    at B (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1191:5728)
+    at Suspense (<anonymous>)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:801:383)
+    at s (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:810:3681)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:748:455)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:677:230)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:746:127)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:710:325)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:735:189)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:754:390)
+    at t (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:743:696)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:743:227)
+    at U (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1054:2992)
+    at RNCSafeAreaProvider (<anonymous>)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:867:477)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:984:202)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1054:1058)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:683:126)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:677:230)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:660:1023)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1058:552)
+    at L (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1054:1840)
+    at anonymous (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:1054:961)
+    at RCTView (<anonymous>)
+    at View (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:296:1246)
+    at c (https://my-app-uber--spotifyacessori.replit.app/1778014787781-154/_expo/static/js/ios/bundle.js:295:340)
+
+anonymous
+    bundle.js:1868:4944
+zi
+    bundle.js:181:87224
+Zi
+    bundle.js:181:95680
+Zi
+    bundle.js:181:95855
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95666
+Zi
+    bundle.js:181:95666
+Zi
+    bundle.js:181:95666
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95666
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95666
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95666
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95666
+Zi
+    bundle.js:181:95666
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95970
+Zi
+    bundle.js:181:95666
+Zi
+    bundle.js:181:95666
+Ki
+    bundle.js:181:95414
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94750
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94807
+Ji
+    bundle.js:181:94654
+Ki
+    bundle.js:181:94832
+bo
+    bundle.js:181:106178
+vo
+    bundle.js:181:105914
+mo
+    bundle.js:181:105694
+fo
+    bundle.js:181:104806
+qu
+    bundle.js:181:99858
+$u
+    bundle.js:181:99697
+Ht
+    bundle.js:181:29381
+Dt
+    bundle.js:181:27999
+jt
+    bundle.js:181:28235
+anonymous
+    bundle.js:181:27608
