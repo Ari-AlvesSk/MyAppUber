@@ -119,6 +119,7 @@ export const api = {
     request<{
       pixEnabled: boolean; cardEnabled: boolean; cashEnabled: boolean;
       stripePublishableKey: string;
+      pricePerKmCar: number; pricePerKmMoto: number;
     }>("/admin/payment-settings/public"),
 
   createPaymentIntent: (data: { rideId: string; amountCents: number; paymentType: "card" | "pix"; paymentMethodId?: string }) =>

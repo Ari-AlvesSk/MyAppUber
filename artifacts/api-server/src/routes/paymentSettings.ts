@@ -83,6 +83,8 @@ router.get("/public", async (req, res) => {
       cardEnabled: doc.cardEnabled,
       cashEnabled: doc.cashEnabled,
       stripePublishableKey: doc.stripePublishableKey,
+      pricePerKmCar: doc.pricePerKmCar ?? DEFAULT_SETTINGS.pricePerKmCar,
+      pricePerKmMoto: doc.pricePerKmMoto ?? DEFAULT_SETTINGS.pricePerKmMoto,
     });
   } catch (err) {
     req.log.error(err);

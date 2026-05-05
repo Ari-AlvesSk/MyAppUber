@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LeafletMap } from "@/components/LeafletMap";
 import { useLocation } from "@/context/LocationContext";
 import { useColors } from "@/hooks/useColors";
+import { SAVED_PLACES, SUGGESTED_PLACES } from "@/data/mock";
 
 export type PickerResult = { label: string; address: string; lat?: number; lng?: number };
 
@@ -364,6 +365,31 @@ export default function LocationPickerScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.resultLabel, { color: colors.foreground }]}>{r.label}</Text>
                   <Text style={[styles.resultAddr, { color: colors.mutedForeground }]} numberOfLines={1}>{r.address}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </>
+        )}
+
+        {/* Nearby suggestions when no query entered */}
+        {query.trim().length === 0 && results.length === 0 && (
+          <>
+            <Text style={[styles.resultTitle, { color: colors.mutedForeground }]}>Perto de você</Text>
+            {[...SAVED_PLACES, ...SUGGESTED_PLACES].map((p) => (
+              <Pressable
+                key={p.id}
+                onPress={() => {
+                  if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
+                  selectResult({ label: p.label, address: p.address, lat: p.lat, lng: p.lng });
+                }}
+                style={({ pressed }) => [styles.resultRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <View style={[styles.resultIcon, { backgroundColor: "#00D26A22" }]}>
+                  <Feather name={(p.icon as any) ?? "map-pin"} size={16} color="#00D26A" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.resultLabel, { color: colors.foreground }]}>{p.label}</Text>
+                  <Text style={[styles.resultAddr, { color: colors.mutedForeground }]} numberOfLines={1}>{p.address}</Text>
                 </View>
               </Pressable>
             ))}

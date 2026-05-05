@@ -40,7 +40,7 @@ import {
 import { api } from "@/utils/api";
 import type { CouponValidateResult } from "@/utils/api";
 import { useColors } from "@/hooks/useColors";
-import type { Place, Ride } from "@/types";
+import type { Place, Ride, RideOption } from "@/types";
 
 const ALL_PLACES: Place[] = [...SAVED_PLACES, ...RECENT_PLACES, ...SUGGESTED_PLACES];
 
@@ -56,6 +56,19 @@ export default function BookingScreen() {
   const params = useLocalSearchParams<{ destinationId?: string }>();
   const { addRide, defaultPaymentId, setDefaultPayment, payments, rides } = useRides();
   const { address, coords, loading: locLoading, requestPermission } = useLocation();
+
+  // ── Dynamic ride options (prices from admin settings) ──
+  const [rideOptions, setRideOptions] = useState<RideOption[]>(RIDE_OPTIONS);
+  useEffect(() => {
+    api.getPublicPaymentSettings().then((s) => {
+      setRideOptions(RIDE_OPTIONS.map((o) => ({
+        ...o,
+        pricePerKmCents: o.tier === "moto"
+          ? Math.round((s.pricePerKmMoto ?? 1.8) * 100)
+          : Math.round((s.pricePerKmCar ?? 2.5) * 100),
+      })));
+    }).catch(() => {});
+  }, []);
 
   // ── Route state ──
   const [customPickup, setCustomPickup] = useState<Place | null>(null);
@@ -138,7 +151,7 @@ export default function BookingScreen() {
     return pool.filter((p) => p.label.toLowerCase().includes(q) || p.address.toLowerCase().includes(q));
   }, [query, rides]);
 
-  const selectedOption = useMemo(() => RIDE_OPTIONS.find((o) => o.tier === selectedTier)!, [selectedTier]);
+  const selectedOption = useMemo(() => rideOptions.find((o) => o.tier === selectedTier) ?? rideOptions[0]!, [selectedTier, rideOptions]);
   const distanceKm = useMemo(() => {
     if (!destination) return 0;
     if (pickup.lat != null && pickup.lng != null && destination.lat != null && destination.lng != null) {
@@ -385,7 +398,7 @@ export default function BookingScreen() {
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>Tipo de corrida</Text>
               <View style={styles.options}>
-                {RIDE_OPTIONS.map((o) => (
+                {rideOptions.map((o) => (
                   <RideOptionRow
                     key={o.tier} option={o} distanceKm={distanceKm} selected={o.tier === selectedTier}
                     onPress={() => { if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {}); setSelectedTier(o.tier); }}
