@@ -32,6 +32,30 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export type CouponValidateResult = {
+  ok: boolean;
+  couponId: string;
+  code: string;
+  description: string;
+  discountType: "percent" | "fixed";
+  discountValue: number;
+  discountCents: number;
+};
+
+export type CouponItem = {
+  id: string;
+  code: string;
+  description: string;
+  discountType: "percent" | "fixed";
+  discountValue: number;
+  minOrderCents: number;
+  maxUses: number;
+  usedCount: number;
+  expiresAt: number | null;
+  active: boolean;
+  createdAt: number;
+};
+
 export const api = {
   loginUser: (email: string, password: string) =>
     request<{ ok: boolean; user: Record<string, unknown> }>("/users/login", {
@@ -72,4 +96,22 @@ export const api = {
     request<{ ok: boolean }>("/drivers/location", { method: "POST", body: JSON.stringify(data) }),
   getOnlineDrivers: () =>
     request<{ driverId: string; driverName: string; vehicleType: string; lat: number; lng: number; online: boolean; updatedAt: number }[]>("/drivers/online"),
+
+  getCoupons: () => request<CouponItem[]>("/coupons"),
+  createCoupon: (data: {
+    code: string;
+    description: string;
+    discountType: "percent" | "fixed";
+    discountValue: number;
+    minOrderCents: number;
+    maxUses: number;
+    expiresAt: number | null;
+    active: boolean;
+  }) => request<{ ok: boolean; id: string }>("/coupons", { method: "POST", body: JSON.stringify(data) }),
+  toggleCoupon: (id: string, active: boolean) =>
+    request<{ ok: boolean }>(`/coupons/${id}`, { method: "PATCH", body: JSON.stringify({ active }) }),
+  deleteCoupon: (id: string) =>
+    request<{ ok: boolean }>(`/coupons/${id}`, { method: "DELETE" }),
+  validateCoupon: (code: string, orderCents: number) =>
+    request<CouponValidateResult>("/coupons/validate", { method: "POST", body: JSON.stringify({ code, orderCents }) }),
 };

@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -36,6 +37,8 @@ import {
   formatDistanceKm,
   formatPrice,
 } from "@/data/mock";
+import { api } from "@/utils/api";
+import type { CouponValidateResult } from "@/utils/api";
 import { useColors } from "@/hooks/useColors";
 import type { Place, Ride } from "@/types";
 
@@ -51,15 +54,29 @@ export default function BookingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ destinationId?: string }>();
-  const { addRide, defaultPaymentId, payments, rides } = useRides();
-  const { address, coords, granted, loading: locLoading, requestPermission } = useLocation();
+  const { addRide, defaultPaymentId, setDefaultPayment, payments, rides } = useRides();
+  const { address, coords, loading: locLoading, requestPermission } = useLocation();
 
-  // ── pickup: starts at real GPS, can be changed via map ──
+  // ── Route state ──
   const [customPickup, setCustomPickup] = useState<Place | null>(null);
   const [destination, setDestination] = useState<Place | null>(() => findPlace(params.destinationId));
   const [query, setQuery] = useState("");
   const [selectedTier, setSelectedTier] = useState(RIDE_OPTIONS[0]!.tier);
   const [requesting, setRequesting] = useState(false);
+
+  // ── Payment modal ──
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [tempPaymentId, setTempPaymentId] = useState<string | null>(null);
+
+  // ── Coupon state ──
+  const [couponCode, setCouponCode] = useState("");
+  const [couponResult, setCouponResult] = useState<CouponValidateResult | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [showCouponInput, setShowCouponInput] = useState(false);
+
+  const selectedPaymentId = tempPaymentId ?? defaultPaymentId;
+  const selectedPayment = payments.find((p) => p.id === selectedPaymentId) ?? payments[0];
 
   // Auto-set pickup from GPS as soon as coords arrive (only once)
   const gpsSetRef = useRef(false);
@@ -83,25 +100,12 @@ export default function BookingScreen() {
     lng: coords?.longitude ?? -49.7903,
   }, [customPickup, address, coords]);
 
-  // Register SEPARATE callbacks — this is the fix for the bug
   useEffect(() => {
     registerPickupCallback((result) => {
-      setCustomPickup({
-        id: "current",
-        label: result.label,
-        address: result.address,
-        lat: result.lat,
-        lng: result.lng,
-      });
+      setCustomPickup({ id: "current", label: result.label, address: result.address, lat: result.lat, lng: result.lng });
     });
     registerDestinationCallback((result) => {
-      setDestination({
-        id: `map-${Date.now()}`,
-        label: result.label,
-        address: result.address,
-        lat: result.lat,
-        lng: result.lng,
-      });
+      setDestination({ id: `map-${Date.now()}`, label: result.label, address: result.address, lat: result.lat, lng: result.lng });
       setQuery("");
     });
   }, []);
@@ -113,66 +117,67 @@ export default function BookingScreen() {
 
   const openPickupPicker = () => {
     if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
-    router.push({
-      pathname: "/location-picker",
-      params: {
-        mode: "pickup",
-        pickupLat: String(pickup.lat ?? -16.0028),
-        pickupLng: String(pickup.lng ?? -49.7903),
-      },
-    });
+    router.push({ pathname: "/location-picker", params: { mode: "pickup", pickupLat: String(pickup.lat ?? -16.0028), pickupLng: String(pickup.lng ?? -49.7903) } });
   };
-
   const openDestinationPicker = () => {
     if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
-    router.push({
-      pathname: "/location-picker",
-      params: {
-        mode: "destination",
-        pickupLat: String(pickup.lat ?? -16.0028),
-        pickupLng: String(pickup.lng ?? -49.7903),
-      },
-    });
+    router.push({ pathname: "/location-picker", params: { mode: "destination", pickupLat: String(pickup.lat ?? -16.0028), pickupLng: String(pickup.lng ?? -49.7903) } });
   };
 
   const filtered = useMemo(() => {
-    const completedRecent = rides
-      .filter((r) => r.status === "completed")
-      .map((r) => r.dropoff);
+    const completedRecent = rides.filter((r) => r.status === "completed").map((r) => r.dropoff);
     const pool = [...SAVED_PLACES, ...completedRecent, ...SUGGESTED_PLACES];
     if (!query.trim()) return pool;
     const q = query.toLowerCase();
-    return pool.filter(
-      (p) => p.label.toLowerCase().includes(q) || p.address.toLowerCase().includes(q),
-    );
+    return pool.filter((p) => p.label.toLowerCase().includes(q) || p.address.toLowerCase().includes(q));
   }, [query, rides]);
 
-  const selectedOption = useMemo(
-    () => RIDE_OPTIONS.find((o) => o.tier === selectedTier)!,
-    [selectedTier],
-  );
+  const selectedOption = useMemo(() => RIDE_OPTIONS.find((o) => o.tier === selectedTier)!, [selectedTier]);
   const distanceKm = useMemo(() => {
     if (!destination) return 0;
-    // Use real GPS coordinates when available
-    if (
-      pickup.lat != null && pickup.lng != null &&
-      destination.lat != null && destination.lng != null
-    ) {
+    if (pickup.lat != null && pickup.lng != null && destination.lat != null && destination.lng != null) {
       return haversineDistanceKm(pickup.lat, pickup.lng, destination.lat, destination.lng);
     }
     return estimateDistanceKm(destination.id);
   }, [destination, pickup.lat, pickup.lng]);
+
   const tripDurationMin = Math.max(3, Math.round(distanceKm * 2.4));
-  const selectedPriceCents = useMemo(
+  const basePriceCents = useMemo(
     () => computePriceCents(distanceKm, selectedOption.pricePerKmCents, selectedOption.minPriceCents),
     [distanceKm, selectedOption],
   );
-  const defaultPayment = payments.find((p) => p.id === defaultPaymentId) ?? payments[0];
+  const discountCents = couponResult?.discountCents ?? 0;
+  const finalPriceCents = Math.max(0, basePriceCents - discountCents);
 
   const handleSelectDestination = (p: Place) => {
     if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
     setDestination(p);
     setQuery("");
+  };
+
+  // ── Coupon validation ──
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
+    setCouponLoading(true);
+    setCouponError(null);
+    setCouponResult(null);
+    try {
+      const result = await api.validateCoupon(code, basePriceCents);
+      setCouponResult(result);
+      setCouponCode("");
+      setShowCouponInput(false);
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e: any) {
+      setCouponError(e?.message ?? "Cupom inválido");
+    }
+    setCouponLoading(false);
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponResult(null);
+    setCouponError(null);
+    setCouponCode("");
   };
 
   const handleConfirm = async () => {
@@ -185,7 +190,7 @@ export default function BookingScreen() {
       dropoff: destination,
       tier: selectedOption.tier,
       tierName: selectedOption.name,
-      priceCents: selectedPriceCents,
+      priceCents: finalPriceCents,
       distanceKm,
       durationMinutes: tripDurationMin,
       status: "searching",
@@ -194,38 +199,29 @@ export default function BookingScreen() {
       completedAt: null,
     };
     await addRide(ride);
+    if (tempPaymentId) await setDefaultPayment(tempPaymentId);
     router.replace(`/ride/${id}`);
   };
 
   const topInset = Platform.OS === "web" ? Math.max(insets.top, 24) : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
-  const payIcon = defaultPayment?.id === "pix" ? "zap" : "dollar-sign";
-
   const showMap = !!destination && query === "";
+  const payIcon = selectedPayment?.id === "pix" || selectedPayment?.type === "wallet" ? "zap" : "dollar-sign";
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={[styles.root, { backgroundColor: colors.background }]}
-    >
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
+
       {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: topInset + 12, borderBottomColor: colors.border }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.iconBtn, { backgroundColor: colors.muted, opacity: pressed ? 0.6 : 1 }]}
-        >
+        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconBtn, { backgroundColor: colors.muted, opacity: pressed ? 0.6 : 1 }]}>
           <Feather name="x" size={20} color={colors.foreground} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Planejar corrida</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 200 + bottomInset }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 220 + bottomInset }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
         {/* ── Route box ── */}
         <View style={[styles.routeBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.routeIconCol}>
@@ -234,33 +230,20 @@ export default function BookingScreen() {
             <View style={[styles.dotDark, { backgroundColor: colors.foreground }]} />
           </View>
           <View style={{ flex: 1 }}>
-            {/* Pickup row */}
             <Pressable onPress={openPickupPicker} style={styles.routeRow}>
               <View style={styles.pickupRow}>
-                <Text style={[styles.routeLabel, { color: colors.foreground }]} numberOfLines={1}>
-                  {pickup.label}
-                </Text>
-                {locLoading && !customPickup && (
-                  <ActivityIndicator size="small" color={colors.accent} />
-                )}
+                <Text style={[styles.routeLabel, { color: colors.foreground }]} numberOfLines={1}>{pickup.label}</Text>
+                {locLoading && !customPickup && <ActivityIndicator size="small" color={colors.accent} />}
                 <View style={[styles.editBadge, { backgroundColor: colors.accent + "20", borderColor: colors.accent + "50" }]}>
                   <Feather name="edit-2" size={10} color={colors.accent} />
                   <Text style={[styles.editBadgeTxt, { color: colors.accent }]}>Mudar</Text>
                 </View>
               </View>
-              <Text style={[styles.routeSub, { color: colors.mutedForeground }]} numberOfLines={1}>
-                {pickup.address}
-              </Text>
+              <Text style={[styles.routeSub, { color: colors.mutedForeground }]} numberOfLines={1}>{pickup.address}</Text>
             </Pressable>
-
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-            {/* Destination row */}
             <Pressable onPress={openDestinationPicker} style={styles.routeRow}>
-              <Text
-                style={[styles.routeLabel, { color: destination ? colors.foreground : colors.mutedForeground }]}
-                numberOfLines={1}
-              >
+              <Text style={[styles.routeLabel, { color: destination ? colors.foreground : colors.mutedForeground }]} numberOfLines={1}>
                 {destination?.label ?? "Selecionar destino"}
               </Text>
               <Text style={[styles.routeSub, { color: colors.mutedForeground }]} numberOfLines={1}>
@@ -270,7 +253,7 @@ export default function BookingScreen() {
           </View>
         </View>
 
-        {/* ── Search input for destination ── */}
+        {/* ── Search input ── */}
         <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Feather name="search" size={16} color={colors.mutedForeground} />
           <TextInput
@@ -282,81 +265,55 @@ export default function BookingScreen() {
             returnKeyType="search"
           />
           {query.length > 0 && (
-            <Pressable onPress={() => setQuery("")}>
-              <Feather name="x" size={16} color={colors.mutedForeground} />
-            </Pressable>
+            <Pressable onPress={() => setQuery("")}><Feather name="x" size={16} color={colors.mutedForeground} /></Pressable>
           )}
         </View>
 
-        {/* ── Results / suggestions ── */}
+        {/* ── Suggestions ── */}
         {(!destination || query.length > 0) && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
-              {query ? "Resultados" : "Salvos e próximos"}
-            </Text>
+            <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{query ? "Resultados" : "Salvos e próximos"}</Text>
             {filtered.length === 0 ? (
               <View style={styles.empty}>
                 <Feather name="search" size={22} color={colors.mutedForeground} />
-                <Text style={[styles.emptyTxt, { color: colors.mutedForeground }]}>
-                  Nenhum resultado para "{query}"
-                </Text>
+                <Text style={[styles.emptyTxt, { color: colors.mutedForeground }]}>Nenhum resultado para "{query}"</Text>
               </View>
             ) : (
-              filtered.map((p) => (
-                <PlaceRow key={p.id} place={p} onPress={() => handleSelectDestination(p)} />
-              ))
+              filtered.map((p) => <PlaceRow key={p.id} place={p} onPress={() => handleSelectDestination(p)} />)
             )}
           </View>
         )}
 
-        {/* ── Map preview + ride options (after destination selected) ── */}
+        {/* ── Map + ride options ── */}
         {showMap && (
           <>
-            {/* Real map showing route */}
             <View style={[styles.mapBox, { borderColor: colors.border }]}>
               <LeafletMap
-                lat={pickup.lat ?? -16.0028}
-                lng={pickup.lng ?? -49.7903}
-                destLat={destination?.lat}
-                destLng={destination?.lng}
-                originLat={pickup.lat}
-                originLng={pickup.lng}
-                mode="destination"
-                height={200}
-                interactive={false}
-                showRoute
+                lat={pickup.lat ?? -16.0028} lng={pickup.lng ?? -49.7903}
+                destLat={destination?.lat} destLng={destination?.lng}
+                originLat={pickup.lat} originLng={pickup.lng}
+                mode="destination" height={200} interactive={false} showRoute
               />
               <View style={[styles.tripStats, { backgroundColor: colors.background }]}>
                 <View style={styles.tripStat}>
                   <Feather name="clock" size={13} color={colors.foreground} />
-                  <Text style={[styles.tripStatTxt, { color: colors.foreground }]}>
-                    {tripDurationMin} min
-                  </Text>
+                  <Text style={[styles.tripStatTxt, { color: colors.foreground }]}>{tripDurationMin} min</Text>
                 </View>
                 <View style={[styles.tripStatDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.tripStat}>
                   <Feather name="map" size={13} color={colors.foreground} />
-                  <Text style={[styles.tripStatTxt, { color: colors.foreground }]}>
-                    {formatDistanceKm(distanceKm)}
-                  </Text>
+                  <Text style={[styles.tripStatTxt, { color: colors.foreground }]}>{formatDistanceKm(distanceKm)}</Text>
                 </View>
               </View>
             </View>
 
-            {/* Ride type selector */}
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>Tipo de corrida</Text>
               <View style={styles.options}>
                 {RIDE_OPTIONS.map((o) => (
                   <RideOptionRow
-                    key={o.tier}
-                    option={o}
-                    distanceKm={distanceKm}
-                    selected={o.tier === selectedTier}
-                    onPress={() => {
-                      if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
-                      setSelectedTier(o.tier);
-                    }}
+                    key={o.tier} option={o} distanceKm={distanceKm} selected={o.tier === selectedTier}
+                    onPress={() => { if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {}); setSelectedTier(o.tier); }}
                   />
                 ))}
               </View>
@@ -365,34 +322,163 @@ export default function BookingScreen() {
         )}
       </ScrollView>
 
-      {/* ── Bottom bar: payment + confirm ── */}
+      {/* ── Bottom bar ── */}
       {destination && query === "" && (
-        <View
-          style={[
-            styles.bottomBar,
-            { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: bottomInset + 12 },
-          ]}
-        >
+        <View style={[styles.bottomBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: bottomInset + 12 }]}>
+
+          {/* Payment method row */}
           <Pressable
+            onPress={() => setShowPaymentModal(true)}
             style={({ pressed }) => [styles.payRow, { backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1 }]}
           >
-            <Feather name={payIcon} size={16} color={colors.foreground} />
-            <Text style={[styles.payTxt, { color: colors.foreground }]}>
-              {defaultPayment?.label ?? "Pix"}
-            </Text>
-            <Text style={[styles.payDetail, { color: colors.mutedForeground }]}>
-              {defaultPayment?.detail ?? "Transferência instantânea"}
-            </Text>
-            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            <View style={[styles.payIconBox, { backgroundColor: selectedPayment?.id === "cash" ? colors.background : colors.accent + "22" }]}>
+              <Feather name={payIcon} size={15} color={selectedPayment?.id === "cash" ? colors.foreground : colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.payTxt, { color: colors.foreground }]}>{selectedPayment?.label ?? "Pix"}</Text>
+              <Text style={[styles.payDetail, { color: colors.mutedForeground }]}>{selectedPayment?.detail ?? "Transferência instantânea"}</Text>
+            </View>
+            <View style={[styles.changePill, { backgroundColor: colors.accent + "20" }]}>
+              <Text style={[styles.changeTxt, { color: colors.accent }]}>Trocar</Text>
+            </View>
           </Pressable>
+
+          {/* Coupon row */}
+          {couponResult ? (
+            <View style={[styles.couponApplied, { backgroundColor: colors.accent + "15", borderColor: colors.accent + "40" }]}>
+              <Feather name="tag" size={15} color={colors.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.couponAppliedCode, { color: colors.accent }]}>{couponResult.code}</Text>
+                <Text style={[styles.couponAppliedDesc, { color: colors.mutedForeground }]}>
+                  -{formatPrice(discountCents)} de desconto
+                </Text>
+              </View>
+              <Pressable onPress={handleRemoveCoupon} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                <Feather name="x-circle" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+          ) : showCouponInput ? (
+            <View style={[styles.couponInputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Feather name="tag" size={15} color={colors.mutedForeground} />
+              <TextInput
+                value={couponCode}
+                onChangeText={(v) => { setCouponCode(v.toUpperCase()); setCouponError(null); }}
+                placeholder="Código do cupom"
+                placeholderTextColor={colors.mutedForeground}
+                style={[styles.couponInput, { color: colors.foreground }]}
+                autoCapitalize="characters"
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleApplyCoupon}
+              />
+              <Pressable
+                onPress={() => { setShowCouponInput(false); setCouponCode(""); setCouponError(null); }}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, padding: 4 })}
+              >
+                <Feather name="x" size={15} color={colors.mutedForeground} />
+              </Pressable>
+              <Pressable
+                onPress={handleApplyCoupon}
+                disabled={!couponCode.trim() || couponLoading}
+                style={({ pressed }) => [styles.couponApplyBtn, { backgroundColor: colors.accent, opacity: pressed || !couponCode.trim() || couponLoading ? 0.6 : 1 }]}
+              >
+                {couponLoading ? <ActivityIndicator size="small" color={colors.accentForeground} /> : (
+                  <Text style={[styles.couponApplyTxt, { color: colors.accentForeground }]}>Aplicar</Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => { setShowCouponInput(true); setCouponError(null); }}
+              style={({ pressed }) => [styles.couponAddBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Feather name="tag" size={14} color={colors.mutedForeground} />
+              <Text style={[styles.couponAddTxt, { color: colors.mutedForeground }]}>Adicionar cupom de desconto</Text>
+              <Feather name="plus" size={14} color={colors.mutedForeground} />
+            </Pressable>
+          )}
+
+          {couponError && (
+            <View style={[styles.couponErrRow, { backgroundColor: "#EF444415", borderColor: "#EF444440" }]}>
+              <Feather name="alert-circle" size={13} color="#EF4444" />
+              <Text style={[styles.couponErrTxt, { color: "#EF4444" }]}>{couponError}</Text>
+            </View>
+          )}
+
+          {/* Price breakdown when discount applied */}
+          {discountCents > 0 && (
+            <View style={[styles.priceBreakdown, { borderColor: colors.border }]}>
+              <View style={styles.priceRow}>
+                <Text style={[styles.priceLbl, { color: colors.mutedForeground }]}>Subtotal</Text>
+                <Text style={[styles.priceVal, { color: colors.mutedForeground }]}>{formatPrice(basePriceCents)}</Text>
+              </View>
+              <View style={styles.priceRow}>
+                <Text style={[styles.priceLbl, { color: colors.accent }]}>Desconto ({couponResult?.code})</Text>
+                <Text style={[styles.priceVal, { color: colors.accent }]}>-{formatPrice(discountCents)}</Text>
+              </View>
+            </View>
+          )}
+
           <PrimaryButton
-            label={`Confirmar ${selectedOption.name} · ${formatPrice(selectedPriceCents)}`}
+            label={`Confirmar ${selectedOption.name} · ${formatPrice(finalPriceCents)}`}
             variant="accent"
             onPress={handleConfirm}
             loading={requesting}
           />
         </View>
       )}
+
+      {/* ── Payment method modal ── */}
+      <Modal visible={showPaymentModal} transparent animationType="slide" onRequestClose={() => setShowPaymentModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPaymentModal(false)}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 16 }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Forma de pagamento</Text>
+            {payments.map((p) => {
+              const isSelected = p.id === selectedPaymentId;
+              const pIcon = p.id === "pix" || p.type === "wallet" ? "zap" : "dollar-sign";
+              const iconColor = p.id === "cash" ? colors.foreground : colors.accent;
+              const iconBg = p.id === "cash" ? colors.muted : colors.accent + "22";
+              return (
+                <Pressable
+                  key={p.id}
+                  onPress={() => {
+                    if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
+                    setTempPaymentId(p.id);
+                    setShowPaymentModal(false);
+                  }}
+                  style={({ pressed }) => [
+                    styles.paymentOption,
+                    { backgroundColor: isSelected ? colors.accent + "12" : colors.card, borderColor: isSelected ? colors.accent : colors.border, opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <View style={[styles.payOptIcon, { backgroundColor: iconBg }]}>
+                    <Feather name={pIcon} size={16} color={iconColor} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.payOptLabel, { color: colors.foreground }]}>{p.label}</Text>
+                    <Text style={[styles.payOptDetail, { color: colors.mutedForeground }]}>{p.detail}</Text>
+                  </View>
+                  {isSelected ? (
+                    <View style={[styles.radioSelected, { backgroundColor: colors.accent }]}>
+                      <Feather name="check" size={12} color={colors.accentForeground} />
+                    </View>
+                  ) : (
+                    <View style={[styles.radioEmpty, { borderColor: colors.border }]} />
+                  )}
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => { setShowPaymentModal(false); router.push("/payment-methods"); }}
+              style={({ pressed }) => [styles.addPaymentBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Feather name="plus" size={16} color={colors.accent} />
+              <Text style={[styles.addPaymentTxt, { color: colors.accent }]}>Gerenciar formas de pagamento</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -407,20 +493,14 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
   scroll: { flex: 1 },
 
-  routeBox: {
-    margin: 20, flexDirection: "row", gap: 14,
-    padding: 16, borderRadius: 20, borderWidth: 1,
-  },
+  routeBox: { margin: 20, flexDirection: "row", gap: 14, padding: 16, borderRadius: 20, borderWidth: 1 },
   routeIconCol: { alignItems: "center", paddingTop: 8 },
   dotGreen: { width: 13, height: 13, borderRadius: 7 },
   routeLine: { width: 2, flex: 1, marginVertical: 6, minHeight: 22 },
   dotDark: { width: 13, height: 13, borderRadius: 4 },
   routeRow: { minHeight: 48, justifyContent: "center", gap: 3 },
   pickupRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  editBadge: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1,
-  },
+  editBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
   editBadgeTxt: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   routeLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold", flex: 1 },
   routeSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
@@ -429,24 +509,17 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: "row", alignItems: "center", gap: 10,
     marginHorizontal: 20, marginBottom: 8,
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderRadius: 16, borderWidth: 1,
+    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 16, borderWidth: 1,
   },
   searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium", paddingVertical: 0 },
 
   section: { paddingHorizontal: 20, paddingBottom: 12 },
-  sectionTitle: {
-    fontSize: 11, fontFamily: "Inter_700Bold",
-    textTransform: "uppercase", letterSpacing: 1.2,
-    marginBottom: 10, marginTop: 8,
-  },
+  sectionTitle: { fontSize: 11, fontFamily: "Inter_700Bold", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 10, marginTop: 8 },
   empty: { paddingVertical: 28, alignItems: "center", gap: 8 },
   emptyTxt: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  options: { gap: 4 },
 
-  mapBox: {
-    marginHorizontal: 20, marginBottom: 8,
-    borderRadius: 20, overflow: "hidden", borderWidth: 1, position: "relative",
-  },
+  mapBox: { marginHorizontal: 20, marginBottom: 8, borderRadius: 20, overflow: "hidden", borderWidth: 1, position: "relative" },
   tripStats: {
     position: "absolute", bottom: 12, alignSelf: "center",
     flexDirection: "row", alignItems: "center", gap: 12,
@@ -456,16 +529,50 @@ const styles = StyleSheet.create({
   tripStatTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   tripStatDivider: { width: 1, height: 12 },
 
-  options: { gap: 4 },
-
+  // Bottom bar
   bottomBar: {
     position: "absolute", bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 20, paddingTop: 14, borderTopWidth: 1, gap: 10,
+    paddingHorizontal: 20, paddingTop: 14, borderTopWidth: 1, gap: 8,
   },
-  payRow: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14,
-  },
-  payTxt: { fontSize: 13, fontFamily: "Inter_700Bold" },
-  payDetail: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular" },
+
+  // Payment row
+  payRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14 },
+  payIconBox: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  payTxt: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  payDetail: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  changePill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  changeTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+
+  // Coupon
+  couponAddBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderStyle: "dashed" },
+  couponAddTxt: { flex: 1, fontSize: 13, fontFamily: "Inter_500Medium" },
+  couponInputRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+  couponInput: { flex: 1, fontSize: 14, fontFamily: "Inter_600SemiBold", paddingVertical: 6, letterSpacing: 0.5 },
+  couponApplyBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  couponApplyTxt: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  couponApplied: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+  couponAppliedCode: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  couponAppliedDesc: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  couponErrRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  couponErrTxt: { fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 },
+
+  // Price breakdown
+  priceBreakdown: { borderRadius: 12, borderWidth: 1, padding: 10, gap: 4 },
+  priceRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  priceLbl: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  priceVal: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+
+  // Payment modal
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 10 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 8 },
+  modalTitle: { fontSize: 17, fontFamily: "Inter_700Bold", marginBottom: 4 },
+  paymentOption: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 16, borderWidth: 1.5 },
+  payOptIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  payOptLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  payOptDetail: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  radioSelected: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  radioEmpty: { width: 24, height: 24, borderRadius: 12, borderWidth: 2 },
+  addPaymentBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13, borderRadius: 14, borderWidth: 1, marginTop: 4 },
+  addPaymentTxt: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });

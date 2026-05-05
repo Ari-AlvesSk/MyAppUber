@@ -18,11 +18,7 @@ import { useColors } from "@/hooks/useColors";
 
 type Promo = { id: string; code: string; desc: string; discount: string; expiry: string; used: boolean };
 
-const DEFAULT_PROMOS: Promo[] = [
-  { id: "1", code: "BEMVINDO20", desc: "Desconto de boas-vindas", discount: "20% OFF", expiry: "31/12/2025", used: false },
-  { id: "2", code: "FERIASJUN", desc: "Promoção de férias de junho", discount: "R$ 10,00 OFF", expiry: "30/06/2025", used: true },
-  { id: "3", code: "RIDE50", desc: "Na sua 50ª corrida", discount: "50% OFF", expiry: "15/08/2025", used: false },
-];
+const DEFAULT_PROMOS: Promo[] = [];
 
 export default function PromosScreen() {
   const colors = useColors();
