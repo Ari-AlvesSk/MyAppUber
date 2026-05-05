@@ -114,4 +114,22 @@ export const api = {
     request<{ ok: boolean }>(`/coupons/${id}`, { method: "DELETE" }),
   validateCoupon: (code: string, orderCents: number) =>
     request<CouponValidateResult>("/coupons/validate", { method: "POST", body: JSON.stringify({ code, orderCents }) }),
+
+  getPublicPaymentSettings: () =>
+    request<{
+      pixKey: string; pixKeyType: string;
+      pixEnabled: boolean; cardEnabled: boolean; cashEnabled: boolean;
+      stripePublishableKey: string;
+    }>("/admin/payment-settings/public"),
+
+  getAdminPaymentSettings: () =>
+    request<{
+      pixKey: string; pixKeyType: string;
+      pixEnabled: boolean; cardEnabled: boolean; cashEnabled: boolean;
+      cardFeePercent: number; commissionPercent: number;
+      stripePublishableKey: string; stripeSecretKey: string;
+    }>("/admin/payment-settings"),
+
+  updateAdminPaymentSettings: (data: Record<string, unknown>) =>
+    request<{ ok: boolean }>("/admin/payment-settings", { method: "PUT", body: JSON.stringify(data) }),
 };

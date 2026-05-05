@@ -6,6 +6,7 @@ import paymentsRouter from "./payments";
 import withdrawalsRouter from "./withdrawals";
 import driversRouter from "./drivers";
 import couponsRouter from "./coupons";
+import paymentSettingsRouter from "./paymentSettings";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use("/payments", paymentsRouter);
 router.use("/withdrawals", withdrawalsRouter);
 router.use("/drivers", driversRouter);
 router.use("/coupons", couponsRouter);
+router.use("/admin/payment-settings", paymentSettingsRouter);
 
 export default router;

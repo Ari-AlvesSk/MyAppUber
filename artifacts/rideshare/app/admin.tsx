@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -25,7 +26,7 @@ import { useColors } from "@/hooks/useColors";
 import type { Ride } from "@/types";
 
 const COMMISSION = 0.2;
-type MainTab = "motoristas" | "viagens" | "financeiro" | "cupons" | "mapa";
+type MainTab = "motoristas" | "viagens" | "financeiro" | "cupons" | "mapa" | "configuracoes";
 type DriverFilter = "pending" | "approved" | "rejected";
 
 type WithdrawalItem = {
@@ -189,11 +190,24 @@ export default function AdminScreen() {
   const [savingCoupon, setSavingCoupon] = useState(false);
   const [couponDeleteLoading, setCouponDeleteLoading] = useState<Record<string, boolean>>({});
 
+  // ── Payment Settings ──
+  const [paySettingsForm, setPaySettingsForm] = useState({
+    pixKey: "", pixKeyType: "cpf",
+    pixEnabled: true, cardEnabled: true, cashEnabled: true,
+    cardFeePercent: "3.5", commissionPercent: "20",
+    stripePublishableKey: "", stripeSecretKey: "",
+  });
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSuccess, setSettingsSuccess] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 67) : insets.top;
 
   useEffect(() => { fetchWithdrawals(); }, []);
   useEffect(() => { if (mainTab === "cupons") fetchCoupons(); }, [mainTab]);
+  useEffect(() => { if (mainTab === "configuracoes" && !settingsLoaded) fetchPaySettings(); }, [mainTab, settingsLoaded]);
   useEffect(() => {
     if (mainTab === "mapa") {
       fetchOnlineDrivers();
@@ -298,6 +312,42 @@ export default function AdminScreen() {
     try { await api.toggleCoupon(id, active); await fetchCoupons(); } catch {}
   };
 
+  const fetchPaySettings = async () => {
+    try {
+      const data = await api.getAdminPaymentSettings();
+      setPaySettingsForm({
+        pixKey: data.pixKey ?? "",
+        pixKeyType: data.pixKeyType ?? "cpf",
+        pixEnabled: data.pixEnabled ?? true,
+        cardEnabled: data.cardEnabled ?? true,
+        cashEnabled: data.cashEnabled ?? true,
+        cardFeePercent: String(data.cardFeePercent ?? 3.5),
+        commissionPercent: String(data.commissionPercent ?? 20),
+        stripePublishableKey: data.stripePublishableKey ?? "",
+        stripeSecretKey: data.stripeSecretKey === "***" ? "" : (data.stripeSecretKey ?? ""),
+      });
+      setSettingsLoaded(true);
+    } catch {}
+  };
+
+  const handleSaveSettings = async () => {
+    setSettingsSaving(true);
+    setSettingsError(null);
+    setSettingsSuccess(false);
+    try {
+      await api.updateAdminPaymentSettings({
+        ...paySettingsForm,
+        cardFeePercent: parseFloat(paySettingsForm.cardFeePercent) || 3.5,
+        commissionPercent: parseFloat(paySettingsForm.commissionPercent) || 20,
+      });
+      setSettingsSuccess(true);
+      setTimeout(() => setSettingsSuccess(false), 3000);
+    } catch (e: any) {
+      setSettingsError(e?.message ?? "Erro ao salvar configurações");
+    }
+    setSettingsSaving(false);
+  };
+
   const handleLogout = async () => { await logout(); router.replace("/login"); };
 
   const driverCounts = {
@@ -320,6 +370,7 @@ export default function AdminScreen() {
     { key: "financeiro", label: "Financeiro", icon: "trending-up", badge: pendingWithdrawals.length },
     { key: "cupons", label: "Cupons", icon: "tag", badge: 0 },
     { key: "mapa", label: "Mapa", icon: "map-pin", badge: onlineDrivers.length },
+    { key: "configuracoes", label: "Config.", icon: "settings", badge: 0 },
   ];
 
   return (
@@ -756,6 +807,186 @@ export default function AdminScreen() {
         </ScrollView>
       )}
 
+      {/* ══════════════ CONFIGURAÇÕES ══════════════ */}
+      {mainTab === "configuracoes" && (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+
+          {/* Chave Pix */}
+          <View style={[s.cfgCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={s.cfgCardHeader}>
+              <View style={[s.cfgIconBox, { backgroundColor: colors.accent + "22" }]}>
+                <Feather name="zap" size={16} color={colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cfgCardTitle, { color: colors.foreground }]}>Chave Pix para Recebimento</Text>
+                <Text style={[s.cfgCardSub, { color: colors.mutedForeground }]}>Passageiros pagarão para esta chave</Text>
+              </View>
+            </View>
+            <Text style={[s.lbl, { color: colors.mutedForeground }]}>TIPO DE CHAVE</Text>
+            <View style={[s.typeRow, { marginHorizontal: 14, flexWrap: "wrap" }]}>
+              {([{ k: "cpf", l: "CPF" }, { k: "cnpj", l: "CNPJ" }, { k: "telefone", l: "Telefone" }, { k: "email", l: "E-mail" }, { k: "aleatoria", l: "Aleatória" }] as const).map((t) => (
+                <Pressable
+                  key={t.k}
+                  onPress={() => setPaySettingsForm((p) => ({ ...p, pixKeyType: t.k }))}
+                  style={[s.typeBtn, { backgroundColor: paySettingsForm.pixKeyType === t.k ? colors.accent : colors.muted, borderColor: paySettingsForm.pixKeyType === t.k ? colors.accent : colors.border }]}
+                >
+                  <Text style={[s.typeTxt, { color: paySettingsForm.pixKeyType === t.k ? colors.accentForeground : colors.foreground }]}>{t.l}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={[s.lbl, { color: colors.mutedForeground, marginTop: 8 }]}>CHAVE PIX</Text>
+            <TextInput
+              style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+              placeholder="Ex: 000.000.000-00"
+              placeholderTextColor={colors.mutedForeground}
+              value={paySettingsForm.pixKey}
+              onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, pixKey: v }))}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          {/* Taxas */}
+          <View style={[s.cfgCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={s.cfgCardHeader}>
+              <View style={[s.cfgIconBox, { backgroundColor: "#7C3AED22" }]}>
+                <Feather name="percent" size={16} color="#7C3AED" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cfgCardTitle, { color: colors.foreground }]}>Taxas e Comissões</Text>
+                <Text style={[s.cfgCardSub, { color: colors.mutedForeground }]}>Em porcentagem sobre o valor da corrida</Text>
+              </View>
+            </View>
+            <View style={s.formRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.lbl, { color: colors.mutedForeground }]}>COMISSÃO PLATAFORMA (%)</Text>
+                <TextInput
+                  style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="20"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={paySettingsForm.commissionPercent}
+                  onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, commissionPercent: v.replace(",", ".") }))}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.lbl, { color: colors.mutedForeground }]}>TAXA CARTÃO (%)</Text>
+                <TextInput
+                  style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="3.5"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={paySettingsForm.cardFeePercent}
+                  onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, cardFeePercent: v.replace(",", ".") }))}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Métodos disponíveis */}
+          <View style={[s.cfgCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={s.cfgCardHeader}>
+              <View style={[s.cfgIconBox, { backgroundColor: "#2563EB22" }]}>
+                <Feather name="credit-card" size={16} color="#2563EB" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cfgCardTitle, { color: colors.foreground }]}>Métodos Disponíveis</Text>
+                <Text style={[s.cfgCardSub, { color: colors.mutedForeground }]}>Habilite ou desabilite formas de pagamento</Text>
+              </View>
+            </View>
+            {([
+              { key: "pixEnabled" as const, label: "Pix", icon: "zap", color: colors.accent },
+              { key: "cardEnabled" as const, label: "Cartão de crédito/débito", icon: "credit-card", color: "#7C3AED" },
+              { key: "cashEnabled" as const, label: "Dinheiro", icon: "dollar-sign", color: "#2563EB" },
+            ]).map((m) => (
+              <View key={m.key} style={[s.toggleRow, { borderTopWidth: 1, borderTopColor: colors.border }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={[s.cfgIconBox, { backgroundColor: m.color + "22" }]}>
+                    <Feather name={m.icon as any} size={14} color={m.color} />
+                  </View>
+                  <Text style={[s.toggleLabel, { color: colors.foreground }]}>{m.label}</Text>
+                </View>
+                <Switch
+                  value={paySettingsForm[m.key] as boolean}
+                  onValueChange={(v) => setPaySettingsForm((p) => ({ ...p, [m.key]: v }))}
+                  trackColor={{ false: colors.border, true: m.color + "99" }}
+                  thumbColor={paySettingsForm[m.key] ? m.color : "#aaa"}
+                />
+              </View>
+            ))}
+          </View>
+
+          {/* Gateway Stripe */}
+          <View style={[s.cfgCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={s.cfgCardHeader}>
+              <View style={[s.cfgIconBox, { backgroundColor: "#635BFF22" }]}>
+                <Feather name="shield" size={16} color="#635BFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cfgCardTitle, { color: colors.foreground }]}>Gateway de Pagamento · Stripe</Text>
+                <Text style={[s.cfgCardSub, { color: colors.mutedForeground }]}>Para cobrar cartões automaticamente</Text>
+              </View>
+            </View>
+            <View style={[s.cfgInfoRow, { backgroundColor: "#635BFF11", borderColor: "#635BFF33" }]}>
+              <Feather name="info" size={13} color="#635BFF" />
+              <Text style={[s.cfgInfoTxt, { color: "#635BFF" }]}>
+                Recomendamos o Stripe: suporta Pix, cartões em BRL e é amplamente utilizado no Brasil. Acesse dashboard.stripe.com para criar sua conta e obter as chaves.
+              </Text>
+            </View>
+            <Text style={[s.lbl, { color: colors.mutedForeground }]}>CHAVE PÚBLICA (pk_live_...)</Text>
+            <TextInput
+              style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+              placeholder="pk_live_..."
+              placeholderTextColor={colors.mutedForeground}
+              value={paySettingsForm.stripePublishableKey}
+              onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, stripePublishableKey: v }))}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={[s.lbl, { color: colors.mutedForeground }]}>CHAVE SECRETA (sk_live_...)</Text>
+            <TextInput
+              style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+              placeholder="sk_live_..."
+              placeholderTextColor={colors.mutedForeground}
+              value={paySettingsForm.stripeSecretKey}
+              onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, stripeSecretKey: v }))}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+            />
+          </View>
+
+          {/* Error / Success */}
+          {settingsError && (
+            <View style={[s.errBox, { backgroundColor: "#EF444415", borderColor: "#EF444440" }]}>
+              <Feather name="alert-circle" size={14} color="#EF4444" />
+              <Text style={[s.errTxt, { color: "#EF4444" }]}>{settingsError}</Text>
+            </View>
+          )}
+          {settingsSuccess && (
+            <View style={[s.errBox, { backgroundColor: colors.accent + "15", borderColor: colors.accent + "40" }]}>
+              <Feather name="check-circle" size={14} color={colors.accent} />
+              <Text style={[s.errTxt, { color: colors.accent }]}>Configurações salvas com sucesso!</Text>
+            </View>
+          )}
+
+          <Pressable
+            onPress={handleSaveSettings}
+            disabled={settingsSaving}
+            style={({ pressed }) => [s.btnSm, { backgroundColor: colors.accent, opacity: pressed || settingsSaving ? 0.7 : 1, marginBottom: 8 }]}
+          >
+            {settingsSaving ? (
+              <ActivityIndicator size="small" color={colors.accentForeground} />
+            ) : (
+              <>
+                <Feather name="save" size={15} color={colors.accentForeground} />
+                <Text style={[s.btnSmTxt, { color: colors.accentForeground }]}>Salvar configurações</Text>
+              </>
+            )}
+          </Pressable>
+        </ScrollView>
+      )}
+
       {/* ══════════════ MAPA ══════════════ */}
       {mainTab === "mapa" && (
         <View style={{ flex: 1 }}>
@@ -899,4 +1130,15 @@ const s = StyleSheet.create({
   driverChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   chipVeh: { width: 24, height: 24, borderRadius: 7, alignItems: "center", justifyContent: "center" },
   driverChipTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+
+  // Configurações
+  cfgCard: { borderRadius: 16, borderWidth: 1, overflow: "hidden", paddingBottom: 8 },
+  cfgCardHeader: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 14 },
+  cfgIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  cfgCardTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  cfgCardSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  cfgInfoRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginHorizontal: 14, marginBottom: 12, padding: 10, borderRadius: 10, borderWidth: 1 },
+  cfgInfoTxt: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 12 },
+  toggleLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
 });

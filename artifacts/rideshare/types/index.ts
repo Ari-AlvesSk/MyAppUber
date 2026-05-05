@@ -60,4 +60,19 @@ export type PaymentMethod = {
   label: string;
   detail: string;
   isDefault: boolean;
+  last4?: string;
+  brand?: string;
+  holderName?: string;
+};
+
+export type PaymentSettings = {
+  pixKey: string;
+  pixKeyType: "cpf" | "cnpj" | "telefone" | "email" | "aleatoria";
+  pixEnabled: boolean;
+  cardEnabled: boolean;
+  cashEnabled: boolean;
+  cardFeePercent: number;
+  commissionPercent: number;
+  stripePublishableKey: string;
+  stripeSecretKey?: string;
 };

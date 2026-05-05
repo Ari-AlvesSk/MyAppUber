@@ -75,6 +75,11 @@ export default function BookingScreen() {
   const [couponLoading, setCouponLoading] = useState(false);
   const [showCouponInput, setShowCouponInput] = useState(false);
 
+  // ── Pix payment modal ──
+  const [showPixModal, setShowPixModal] = useState(false);
+  const [pixSettings, setPixSettings] = useState<{ pixKey: string; pixKeyType: string } | null>(null);
+  const [pixCopied, setPixCopied] = useState(false);
+
   const selectedPaymentId = tempPaymentId ?? defaultPaymentId;
   const selectedPayment = payments.find((p) => p.id === selectedPaymentId) ?? payments[0];
 
@@ -180,14 +185,13 @@ export default function BookingScreen() {
     setCouponCode("");
   };
 
-  const handleConfirm = async () => {
-    if (!destination) return;
+  const doCreateRide = async () => {
     setRequesting(true);
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 6);
     const ride: Ride = {
       id,
       pickup,
-      dropoff: destination,
+      dropoff: destination!,
       tier: selectedOption.tier,
       tierName: selectedOption.name,
       priceCents: finalPriceCents,
@@ -201,6 +205,43 @@ export default function BookingScreen() {
     await addRide(ride);
     if (tempPaymentId) await setDefaultPayment(tempPaymentId);
     router.replace(`/ride/${id}`);
+  };
+
+  const handleConfirm = async () => {
+    if (!destination) return;
+    const isPixPayment = selectedPayment?.id === "pix" || selectedPayment?.type === "wallet";
+    if (isPixPayment) {
+      setRequesting(true);
+      try {
+        const s = await api.getPublicPaymentSettings();
+        setPixSettings(s);
+      } catch {
+        setPixSettings({ pixKey: "Não configurado pelo admin", pixKeyType: "cpf" });
+      }
+      setRequesting(false);
+      setShowPixModal(true);
+      return;
+    }
+    await doCreateRide();
+  };
+
+  const handlePixConfirm = async () => {
+    setShowPixModal(false);
+    await doCreateRide();
+  };
+
+  const copyPixKey = () => {
+    const key = pixSettings?.pixKey ?? "";
+    if (Platform.OS === "web") {
+      try { (navigator as any).clipboard?.writeText(key); } catch {}
+    } else {
+      try {
+        const { Clipboard } = require("react-native") as any;
+        Clipboard?.setString?.(key);
+      } catch {}
+    }
+    setPixCopied(true);
+    setTimeout(() => setPixCopied(false), 2500);
   };
 
   const topInset = Platform.OS === "web" ? Math.max(insets.top, 24) : insets.top;
@@ -428,6 +469,78 @@ export default function BookingScreen() {
         </View>
       )}
 
+      {/* ── Pix payment modal ── */}
+      <Modal visible={showPixModal} transparent animationType="slide" onRequestClose={() => setShowPixModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.pixSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 20 }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            <View style={styles.pixHeader}>
+              <View style={[styles.pixIconBox, { backgroundColor: colors.accent + "22" }]}>
+                <Feather name="zap" size={26} color={colors.accent} />
+              </View>
+              <Text style={[styles.pixTitle, { color: colors.foreground }]}>Pagamento via Pix</Text>
+              <Text style={[styles.pixSubtitle, { color: colors.mutedForeground }]}>
+                Realize o pagamento e confirme abaixo para chamar o motorista
+              </Text>
+            </View>
+
+            <View style={[styles.pixAmountBox, { backgroundColor: colors.accent + "15", borderColor: colors.accent + "40" }]}>
+              <Text style={[styles.pixAmountLabel, { color: colors.accent }]}>Valor a pagar</Text>
+              <Text style={[styles.pixAmount, { color: colors.accent }]}>{formatPrice(finalPriceCents)}</Text>
+            </View>
+
+            <Text style={[styles.pixKeyLabel, { color: colors.mutedForeground }]}>CHAVE PIX DA PLATAFORMA</Text>
+            <View style={[styles.pixKeyBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.pixKeyType, { color: colors.mutedForeground }]}>
+                  {pixSettings?.pixKeyType === "cpf" ? "CPF"
+                    : pixSettings?.pixKeyType === "cnpj" ? "CNPJ"
+                    : pixSettings?.pixKeyType === "telefone" ? "Telefone"
+                    : pixSettings?.pixKeyType === "email" ? "E-mail"
+                    : "Chave aleatória"}
+                </Text>
+                <TextInput
+                  value={pixSettings?.pixKey ?? "—"}
+                  editable={false}
+                  selectTextOnFocus
+                  style={[styles.pixKeyValue, { color: colors.foreground }]}
+                />
+              </View>
+              <Pressable
+                onPress={copyPixKey}
+                style={({ pressed }) => [styles.pixCopyBtn, { backgroundColor: pixCopied ? colors.accent : colors.accent + "22", opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Feather name={pixCopied ? "check" : "copy"} size={15} color={pixCopied ? colors.accentForeground : colors.accent} />
+                <Text style={[styles.pixCopyTxt, { color: pixCopied ? colors.accentForeground : colors.accent }]}>
+                  {pixCopied ? "Copiado!" : "Copiar"}
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={[styles.pixInfoBox, { backgroundColor: colors.muted }]}>
+              <Feather name="info" size={13} color={colors.mutedForeground} />
+              <Text style={[styles.pixInfoTxt, { color: colors.mutedForeground }]}>
+                Abra seu banco, faça o Pix com a chave acima e volte aqui para confirmar.
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={handlePixConfirm}
+              style={({ pressed }) => [styles.pixConfirmBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}
+            >
+              <Feather name="check-circle" size={18} color={colors.accentForeground} />
+              <Text style={[styles.pixConfirmTxt, { color: colors.accentForeground }]}>Já realizei o pagamento</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowPixModal(false)}
+              style={({ pressed }) => [styles.pixCancelBtn, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Text style={[styles.pixCancelTxt, { color: colors.mutedForeground }]}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Payment method modal ── */}
       <Modal visible={showPaymentModal} transparent animationType="slide" onRequestClose={() => setShowPaymentModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowPaymentModal(false)}>
@@ -561,6 +674,28 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   priceLbl: { fontSize: 13, fontFamily: "Inter_500Medium" },
   priceVal: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+
+  // Pix modal
+  pixSheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, gap: 12 },
+  pixHeader: { alignItems: "center", gap: 8, marginBottom: 4 },
+  pixIconBox: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  pixTitle: { fontSize: 19, fontFamily: "Inter_700Bold", textAlign: "center" },
+  pixSubtitle: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 19 },
+  pixAmountBox: { alignItems: "center", paddingVertical: 14, borderRadius: 16, borderWidth: 1 },
+  pixAmountLabel: { fontSize: 11, fontFamily: "Inter_700Bold", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
+  pixAmount: { fontSize: 32, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  pixKeyLabel: { fontSize: 11, fontFamily: "Inter_700Bold", textTransform: "uppercase", letterSpacing: 1.2 },
+  pixKeyBox: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 14, borderWidth: 1, padding: 14 },
+  pixKeyType: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 },
+  pixKeyValue: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  pixCopyBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
+  pixCopyTxt: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  pixInfoBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
+  pixInfoTxt: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  pixConfirmBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 15, borderRadius: 16 },
+  pixConfirmTxt: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  pixCancelBtn: { alignItems: "center", paddingVertical: 10 },
+  pixCancelTxt: { fontSize: 14, fontFamily: "Inter_500Medium" },
 
   // Payment modal
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },

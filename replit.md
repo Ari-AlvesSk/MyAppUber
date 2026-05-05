@@ -61,6 +61,9 @@ Express 5 server mounted at `/api`. Routes:
 - `PATCH /api/withdrawals/:id` — admin approves/rejects withdrawal
 - `POST /api/drivers/location` — driver posts real-time GPS location
 - `GET /api/drivers/online` — admin gets list of currently online drivers (in-memory, 30s TTL)
+- `GET /api/admin/payment-settings` — admin: get full payment settings (includes Stripe keys masked)
+- `GET /api/admin/payment-settings/public` — passenger: get public payment settings (pixKey, pixKeyType, enabled flags)
+- `PUT /api/admin/payment-settings` — admin: update payment settings (Pix key, rates, toggles, Stripe keys)
 
 ### RideShare App (`artifacts/rideshare`)
 
@@ -86,10 +89,25 @@ Expo mobile app (pt-BR). Theme: black + lime `#00D26A`. Uses `useColors()` hook.
 
 **Admin Panel** (`app/admin.tsx`):
 - Redesigned header with ADMIN badge
-- 4 tabs: Motoristas | Viagens | Financeiro | Mapa AO VIVO
+- 6 tabs: Motoristas | Viagens | Financeiro | Cupons | Mapa AO VIVO | Config.
 - Tab badges for pending items
 - Financeiro: 4 stat cards + withdrawal requests with approve/reject
 - Mapa AO VIVO: polls `GET /api/drivers/online` every 8s, shows online drivers as car/moto icons on Leaflet map
+- Config. (Configurações de Pagamento): Chave Pix, taxas/comissões, toggles de métodos (Pix/Cartão/Dinheiro), Stripe keys
+
+**Payment Settings** (`lib/db/src/models/paymentSettings.ts`):
+- MongoDB singleton: pixKey, pixKeyType, pixEnabled, cardEnabled, cashEnabled, cardFeePercent, commissionPercent, stripePublishableKey, stripeSecretKey
+- Recommended gateway: Stripe (suporta Pix + BRL + cartões)
+
+**Payment Methods** (`app/payment-methods.tsx`):
+- Tab selector: Pix | Cartão
+- Pix: tipo de chave (CPF/CNPJ/Telefone/E-mail/Aleatória) + campo de chave
+- Cartão: número formatado (XXXX XXXX XXXX XXXX), titular, validade MM/AA, detecção de bandeira (Visa/Mastercard/Elo/Amex)
+
+**Booking Pix Flow** (`app/booking.tsx`):
+- Pagamento Pix: mostra modal com chave Pix da plataforma + botão copiar + "Já realizei o pagamento"
+- Motorista só é chamado após o passageiro confirmar o pagamento no modal
+- Pagamento cartão: corrida criada diretamente (cobrança via Stripe quando integrado)
 
 **Map** (`components/LeafletMap.web.tsx`):
 - `showAsVehicle + vehicleType` — renders car/moto SVG icon instead of dot for driver
@@ -103,7 +121,8 @@ Expo mobile app (pt-BR). Theme: black + lime `#00D26A`. Uses `useColors()` hook.
 - `(tabs)/account` — passenger account menu
 - `(driver)/index` — driver home (online toggle + live location posting + car/moto map icon)
 - `(driver)/earnings` — earnings history + withdraw modal with PIX key input
-- `booking` — pickup/destination + tier selection
+- `booking` — pickup/destination + tier selection + Pix payment gate modal
 - `ride/[id]` — live ride tracking screen
 - `location-picker` — interactive map + geocoding search
-- `admin` — admin panel: driver approvals, ride stats, withdrawals management, live driver map
+- `admin` — admin panel: driver approvals, ride stats, withdrawals management, live driver map, payment settings
+- `payment-methods` — add/remove Pix keys and credit/debit cards; set default payment method

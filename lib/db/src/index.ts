@@ -21,3 +21,4 @@ export * from "./models/ride";
 export * from "./models/payment";
 export * from "./models/withdrawal";
 export * from "./models/coupon";
+export * from "./models/paymentSettings";
