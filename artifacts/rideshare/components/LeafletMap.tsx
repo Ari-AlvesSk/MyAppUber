@@ -4,10 +4,18 @@ import React, { useCallback, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
 
+type DriverMarker = {
+  driverId: string;
+  driverName: string;
+  vehicleType: string;
+  lat: number;
+  lng: number;
+};
+
 type Props = {
   lat?: number;
   lng?: number;
-  height?: number;
+  height?: number | null;
   interactive?: boolean;
   onTap?: (lat: number, lng: number) => void;
   destLat?: number;
@@ -17,6 +25,10 @@ type Props = {
   mode?: "pickup" | "destination";
   zoom?: number;
   showRoute?: boolean;
+  vehicleType?: "moto" | "car";
+  showAsVehicle?: boolean;
+  driverMarkers?: DriverMarker[];
+  adminMode?: boolean;
 };
 
 function buildHtml(
@@ -135,6 +147,10 @@ export function LeafletMap({
   mode = "destination",
   zoom = 16,
   showRoute = false,
+  vehicleType: _vehicleType,
+  showAsVehicle: _showAsVehicle,
+  driverMarkers: _driverMarkers,
+  adminMode: _adminMode,
 }: Props) {
   const webViewRef = useRef<any>(null);
 
@@ -156,8 +172,10 @@ export function LeafletMap({
     destLat, destLng, originLat, originLng, showRoute,
   );
 
+  const resolvedHeight = height ?? 300;
+
   return (
-    <View style={[styles.wrap, { height }]}>
+    <View style={[styles.wrap, { height: resolvedHeight }]}>
       <WebView
         ref={webViewRef}
         source={{ html }}

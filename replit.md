@@ -2,7 +2,7 @@
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Expo mobile rideshare app (pt-BR) with an Express API server backed by PostgreSQL.
+pnpm workspace monorepo using TypeScript. Expo mobile rideshare app (pt-BR) with an Express API server backed by MongoDB Atlas.
 
 ## Stack
 
@@ -13,7 +13,6 @@ pnpm workspace monorepo using TypeScript. Expo mobile rideshare app (pt-BR) with
 - **API framework**: Express 5
 - **Database**: MongoDB Atlas via Mongoose (`lib/db`) — DB: `DbSistemaCaronaParaunaMobi`
 - **Validation**: Zod
-- **API codegen**: Orval (from OpenAPI spec in `lib/api-spec`)
 - **Build**: esbuild
 - **Mobile**: Expo Router (React Native + web)
 
@@ -22,6 +21,7 @@ pnpm workspace monorepo using TypeScript. Expo mobile rideshare app (pt-BR) with
 - `usuarios` — user profiles (IUser model)
 - `corridas` — ride history (IRide model)
 - `pagamentos` — payment methods (IPayment model)
+- `saques` — withdrawal requests (IWithdrawal model)
 
 ## Environment Variables
 
@@ -31,10 +31,8 @@ pnpm workspace monorepo using TypeScript. Expo mobile rideshare app (pt-BR) with
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run typecheck:libs` — build composite libs (run before leaf typechecks)
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks/Zod from OpenAPI
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `PORT=20619 pnpm --filter @workspace/rideshare run dev` — run Expo app
 
 ## Artifacts
 
@@ -43,57 +41,64 @@ pnpm workspace monorepo using TypeScript. Expo mobile rideshare app (pt-BR) with
 Express 5 server mounted at `/api`. Routes:
 - `GET/PUT /api/users/:id` — get / upsert user profile
 - `PATCH /api/users/:id/password` — update password hash
+- `POST /api/users/login` — authenticate user
 - `GET /api/rides?userId=` — user ride history
+- `GET /api/rides?driverId=` — driver ride history
 - `GET /api/rides/all` — admin: all platform rides
 - `POST /api/rides` — create ride
 - `PATCH /api/rides/:id` — update ride status/driver/completedAt
 - `GET /api/payments?userId=` — user payment methods
 - `POST /api/payments` — add payment method
 - `DELETE /api/payments/:id?userId=` — remove payment method
+- `GET /api/withdrawals` — all withdrawal requests (admin)
+- `GET /api/withdrawals?driverId=` — driver's own withdrawals
+- `POST /api/withdrawals` — driver creates withdrawal request
+- `PATCH /api/withdrawals/:id` — admin approves/rejects withdrawal
+- `POST /api/drivers/location` — driver posts real-time GPS location
+- `GET /api/drivers/online` — admin gets list of currently online drivers (in-memory, 30s TTL)
 
 ### RideShare App (`artifacts/rideshare`)
 
 Expo mobile app (pt-BR). Theme: black + lime `#00D26A`. Uses `useColors()` hook.
 
-**Config**: `app.config.ts` (converted from app.json) — sets `extra.apiBase` from `REPLIT_DOMAINS` env var.
-
-**API client**: `utils/api.ts` — uses `/api` relative path on web, `extra.apiBase` on native.
+**API client**: `utils/api.ts` — uses `/api` relative path on web.
 
 **Auth** (`context/AuthContext.tsx`):
-- AsyncStorage key: `rideshare:auth:v1`
-- Roles: `passenger` | `driver` | `admin` (admin@rideshare.com)
+- Roles: `passenger` | `driver` | `admin`
 - Methods: `login`, `register`, `logout`, `updateUser`, `updatePassword`, `switchRole`, `approveDriver`, `rejectDriver`, `checkDriverStatus`
-- Syncs to `/api/users/:id` (fire-and-forget, AsyncStorage is source of truth)
 
-**Rides/Payments** (`context/RideContext.tsx`):
-- AsyncStorage keys: `rideshare:rides:v1`, `rideshare:platform_rides:v1`, `rideshare:custom_payments:v1`
-- `setUserId(id)` must be called after login/register to enable API sync
-- Syncs rides to `/api/rides` and payments to `/api/payments` (fire-and-forget)
+**Withdrawal Logic** (`app/(driver)/earnings.tsx`):
+- Available balance = total completed ride earnings - R$2/trip app fee - pending/approved withdrawals
+- Cash tips excluded (already received directly)
+- Driver enters PIX key and requests withdrawal
+- Withdrawal history shown with status chips
+- On submit: `POST /api/withdrawals` creates pending request
 
-**Location** (`context/LocationContext.tsx`):
-- expo-location GPS + reverse geocoding
-- Exposes `address`, `coords`, `granted`, `loading`, `requestPermission`
+**Driver Location Tracking** (`app/(driver)/index.tsx`):
+- When online: posts GPS location every 10s to `POST /api/drivers/location`
+- When offline: sends online=false to remove from store
+- API server maintains in-memory store with 30s TTL
+
+**Admin Panel** (`app/admin.tsx`):
+- Redesigned header with ADMIN badge
+- 4 tabs: Motoristas | Viagens | Financeiro | Mapa AO VIVO
+- Tab badges for pending items
+- Financeiro: 4 stat cards + withdrawal requests with approve/reject
+- Mapa AO VIVO: polls `GET /api/drivers/online` every 8s, shows online drivers as car/moto icons on Leaflet map
+
+**Map** (`components/LeafletMap.web.tsx`):
+- `showAsVehicle + vehicleType` — renders car/moto SVG icon instead of dot for driver
+- `driverMarkers` — array of online drivers shown as car (blue) or moto (purple) icons with tooltips
+- `adminMode` — enables zoom controls, slightly zoomed out view
+- Dynamic update via `postMessage({ type: 'updateDriverMarkers', drivers })` without full re-render
 
 **Screens**:
-- `login`, `register` — call `setUserId(u.id)` from RideContext after auth
+- `login`, `register` — auth
 - `(tabs)/index` — passenger home map with ride request button
 - `(tabs)/account` — passenger account menu
-- `(driver)/index` — driver home (online toggle + ride request simulation)
-- `(driver)/earnings` — earnings history
-- `booking` — pickup/destination + tier selection; pickup tappable → opens `/location-picker`
+- `(driver)/index` — driver home (online toggle + live location posting + car/moto map icon)
+- `(driver)/earnings` — earnings history + withdraw modal with PIX key input
+- `booking` — pickup/destination + tier selection
 - `ride/[id]` — live ride tracking screen
-- `location-picker` — interactive SVG map + geocoding search + GPS button; result returned via `_locationPickerCallback` module-level pattern
-- `profile-edit`, `payment-methods`, `promos`, `security`, `notifications`, `help`, `legal` — passenger account sub-screens
-- `admin` — admin panel: ride stats, financial tracking, driver approvals
-
-**Location Picker callback pattern** (`app/location-picker.tsx`):
-```typescript
-// In booking.tsx — before navigating:
-registerLocationPickerCallback((result) => { setCustomPickup(result); });
-router.push("/location-picker");
-// location-picker calls _locationPickerCallback(result) then router.back()
-```
-
-## Database Schema (`lib/db`)
-
-Tables: `users`, `rides`, `payments` — see `lib/db/src/schema/`.
+- `location-picker` — interactive map + geocoding search
+- `admin` — admin panel: driver approvals, ride stats, withdrawals management, live driver map

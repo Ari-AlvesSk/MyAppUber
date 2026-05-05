@@ -19,3 +19,4 @@ export async function connectDB(): Promise<void> {
 export * from "./models/user";
 export * from "./models/ride";
 export * from "./models/payment";
+export * from "./models/withdrawal";

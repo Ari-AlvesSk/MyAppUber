@@ -4,12 +4,8 @@ function getApiBase(): string {
   if (Platform.OS === "web") {
     return "/api";
   }
-  // Native (Expo Go / device): needs absolute URL.
-  // EXPO_PUBLIC_DOMAIN is injected at build time via the dev script:
-  // EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   if (domain) return `https://${domain}/api`;
-  // Fallback: local dev on same machine
   return "http://localhost:8080/api";
 }
 
@@ -64,4 +60,16 @@ export const api = {
     request<{ ok: boolean }>("/payments", { method: "POST", body: JSON.stringify(data) }),
   deletePayment: (id: string, userId: string) =>
     request<{ ok: boolean }>(`/payments/${id}?userId=${encodeURIComponent(userId)}`, { method: "DELETE" }),
+
+  getWithdrawals: (driverId?: string) =>
+    request<unknown[]>(`/withdrawals${driverId ? `?driverId=${encodeURIComponent(driverId)}` : ""}`),
+  createWithdrawal: (data: { driverId: string; driverName: string; pixKey: string; amountCents: number }) =>
+    request<{ ok: boolean; id: string }>("/withdrawals", { method: "POST", body: JSON.stringify(data) }),
+  processWithdrawal: (id: string, data: { status: "approved" | "rejected"; rejectionReason?: string }) =>
+    request<{ ok: boolean }>(`/withdrawals/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+
+  postDriverLocation: (data: { driverId: string; driverName: string; vehicleType: string; lat: number; lng: number; online: boolean }) =>
+    request<{ ok: boolean }>("/drivers/location", { method: "POST", body: JSON.stringify(data) }),
+  getOnlineDrivers: () =>
+    request<{ driverId: string; driverName: string; vehicleType: string; lat: number; lng: number; online: boolean; updatedAt: number }[]>("/drivers/online"),
 };

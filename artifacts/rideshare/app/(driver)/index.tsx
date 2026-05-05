@@ -49,6 +49,7 @@ export default function DriverHomeScreen() {
   const [completedToday, setCompletedToday] = useState(0);
   const [earnedTodayCents, setEarnedTodayCents] = useState(0);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const locationRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 24) : insets.top + 8;
@@ -73,7 +74,6 @@ export default function DriverHomeScreen() {
     return () => loop.stop();
   }, [online, pulse]);
 
-  // Load today's stats from API
   useEffect(() => {
     if (!user?.id) return;
     api.getDriverRides(user.id).then((rows) => {
@@ -101,6 +101,40 @@ export default function DriverHomeScreen() {
       setEarnedTodayCents(earned);
     }).catch(() => {});
   }, [user?.id]);
+
+  const postLocation = useCallback(() => {
+    if (!user?.id || !coords) return;
+    api.postDriverLocation({
+      driverId: user.id,
+      driverName: user.name,
+      vehicleType: user.vehicleType ?? "car",
+      lat: coords.latitude,
+      lng: coords.longitude,
+      online,
+    }).catch(() => {});
+  }, [user, coords, online]);
+
+  useEffect(() => {
+    if (online && user?.id) {
+      postLocation();
+      locationRef.current = setInterval(postLocation, 10000);
+    } else {
+      if (locationRef.current) { clearInterval(locationRef.current); locationRef.current = null; }
+      if (user?.id) {
+        api.postDriverLocation({
+          driverId: user.id,
+          driverName: user.name ?? "",
+          vehicleType: user.vehicleType ?? "car",
+          lat: coords?.latitude ?? 0,
+          lng: coords?.longitude ?? 0,
+          online: false,
+        }).catch(() => {});
+      }
+    }
+    return () => {
+      if (locationRef.current) { clearInterval(locationRef.current); locationRef.current = null; }
+    };
+  }, [online, user?.id]);
 
   const fetchPending = useCallback(async () => {
     if (!user?.vehicleType || activeRide) return;
@@ -132,7 +166,6 @@ export default function DriverHomeScreen() {
     } catch {}
   }, [user?.vehicleType, activeRide]);
 
-  // Poll for pending rides when online
   useEffect(() => {
     if (!online || activeRide) {
       if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
@@ -153,7 +186,6 @@ export default function DriverHomeScreen() {
 
   const handleAccept = async () => {
     if (!pendingRide || !user) return;
-    const rideOption = RIDE_OPTIONS.find((o) => o.tier === pendingRide.tier);
     const driverObj: Driver = {
       id: user.id,
       name: user.name,
@@ -217,7 +249,6 @@ export default function DriverHomeScreen() {
         contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <View>
             <Text style={[styles.greet, { color: colors.mutedForeground }]}>Olá,</Text>
@@ -229,7 +260,6 @@ export default function DriverHomeScreen() {
           </View>
         </View>
 
-        {/* Map */}
         <View style={[styles.mapWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <LeafletMap
             height={260}
@@ -237,22 +267,18 @@ export default function DriverHomeScreen() {
             lng={coords?.longitude ?? -49.7903}
             interactive={false}
             showRoute={false}
+            vehicleType={user?.vehicleType ?? "car"}
+            showAsVehicle={true}
           />
-          <View style={styles.pulseWrap} pointerEvents="none">
-            {online && (
-              <Animated.View style={[styles.pulse, { backgroundColor: colors.accent, transform: [{ scale: pulse }], opacity: pulse.interpolate({ inputRange: [1, 1.5], outputRange: [0.5, 0] }) }]} />
-            )}
-            <View style={[styles.pulseDot, { backgroundColor: online ? colors.accent : colors.muted, borderColor: colors.background }]}>
-              <MaterialCommunityIcons name={vehicleIcon} size={16} color={online ? colors.accentForeground : colors.foreground} />
-            </View>
-          </View>
           <View style={[styles.statusOverlay, { backgroundColor: colors.background }]}>
             <View style={[styles.statusDot, { backgroundColor: online ? colors.accent : colors.mutedForeground }]} />
             <Text style={[styles.statusTxt, { color: colors.foreground }]}>{online ? "Online" : "Offline"}</Text>
           </View>
+          {online && (
+            <View style={[styles.pulseRing, { borderColor: colors.accent }]} pointerEvents="none" />
+          )}
         </View>
 
-        {/* Toggle */}
         <View style={[styles.toggleCard, { backgroundColor: colors.foreground }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.toggleTitle, { color: colors.background }]}>
@@ -272,13 +298,11 @@ export default function DriverHomeScreen() {
           />
         </View>
 
-        {/* Stats */}
         <View style={styles.statsRow}>
           <StatBlock label="Hoje" value={formatPrice(earnedTodayCents)} icon="dollar-sign" accent />
           <StatBlock label="Corridas" value={completedToday.toString()} icon="check-circle" />
         </View>
 
-        {/* Active ride management */}
         {activeRide && (
           <View style={[styles.requestCard, { backgroundColor: colors.card, borderColor: colors.accent }]}>
             <View style={styles.requestHeader}>
@@ -319,7 +343,6 @@ export default function DriverHomeScreen() {
           </View>
         )}
 
-        {/* Pending ride request */}
         {!activeRide && pendingRide && (
           <View style={[styles.requestCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.requestHeader}>
@@ -402,9 +425,7 @@ const styles = StyleSheet.create({
   vehiclePill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
   vehiclePillTxt: { fontSize: 13, fontFamily: "Inter_700Bold" },
   mapWrap: { marginHorizontal: 20, borderRadius: 22, overflow: "hidden", borderWidth: 1, position: "relative" },
-  pulseWrap: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
-  pulse: { position: "absolute", width: 64, height: 64, borderRadius: 32 },
-  pulseDot: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 3 },
+  pulseRing: { position: "absolute", top: 12, right: 12, width: 12, height: 12, borderRadius: 6, borderWidth: 2 },
   statusOverlay: { position: "absolute", top: 12, left: 12, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusTxt: { fontSize: 12, fontFamily: "Inter_700Bold" },
