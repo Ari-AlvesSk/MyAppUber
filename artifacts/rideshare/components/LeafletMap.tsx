@@ -10,6 +10,9 @@ type Props = {
   onTap?: (lat: number, lng: number) => void;
   destLat?: number;
   destLng?: number;
+  originLat?: number;
+  originLng?: number;
+  mode?: "pickup" | "destination";
   zoom?: number;
   showRoute?: boolean;
 };
