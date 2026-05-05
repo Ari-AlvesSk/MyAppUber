@@ -25,18 +25,27 @@ type NotifGroup = {
 
 const GROUPS: NotifGroup[] = [
   {
-    title: "Corridas",
+    title: "Corridas (Passageiro)",
     items: [
       { id: "ride_confirmed", label: "Corrida confirmada", desc: "Quando sua corrida for aceita por um motorista", icon: "check-circle", tint: "#00D26A" },
       { id: "driver_arriving", label: "Motorista a caminho", desc: "Quando o motorista estiver se aproximando", icon: "navigation", tint: "#3B82F6" },
-      { id: "ride_completed", label: "Corrida concluída", desc: "Resumo e recibo da corrida", icon: "flag", tint: "#8B5CF6" },
+      { id: "ride_completed", label: "Corrida concluída", desc: "Resumo e recibo da corrida ao terminar", icon: "flag", tint: "#8B5CF6" },
+      { id: "ride_cancelled", label: "Corrida cancelada", desc: "Quando uma corrida for cancelada pelo motorista", icon: "x-circle", tint: "#EF4444" },
+    ],
+  },
+  {
+    title: "Motorista",
+    items: [
+      { id: "new_ride_request", label: "Nova solicitação de corrida", desc: "Quando um passageiro solicitar corrida próxima", icon: "bell", tint: "#F59E0B" },
+      { id: "withdrawal_approved", label: "Saque aprovado", desc: "Quando seu saque via PIX for aprovado", icon: "dollar-sign", tint: "#00D26A" },
+      { id: "withdrawal_rejected", label: "Saque rejeitado", desc: "Quando uma solicitação de saque for recusada", icon: "alert-circle", tint: "#EF4444" },
     ],
   },
   {
     title: "Promoções",
     items: [
       { id: "promos", label: "Promoções e ofertas", desc: "Descontos e cupons exclusivos para você", icon: "tag", tint: "#F59E0B" },
-      { id: "news", label: "Novidades do RideShare", desc: "Novos recursos e atualizações do app", icon: "bell", tint: "#EC4899" },
+      { id: "news", label: "Novidades do Paraúna Mobi", desc: "Novos recursos e atualizações do app", icon: "bell", tint: "#EC4899" },
     ],
   },
   {
@@ -51,6 +60,10 @@ const DEFAULT_STATE: Record<string, boolean> = {
   ride_confirmed: true,
   driver_arriving: true,
   ride_completed: true,
+  ride_cancelled: true,
+  new_ride_request: true,
+  withdrawal_approved: true,
+  withdrawal_rejected: true,
   promos: false,
   news: false,
   weekly: false,

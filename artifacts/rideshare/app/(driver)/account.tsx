@@ -17,11 +17,11 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 const SETTINGS = [
-  { id: "docs", label: "Documentos", icon: "file-text" as const },
-  { id: "vehicle", label: "Meu veículo", icon: "truck" as const },
-  { id: "tax", label: "Impostos e benefícios", icon: "briefcase" as const },
-  { id: "help", label: "Ajuda e Suporte", icon: "help-circle" as const },
-  { id: "legal", label: "Termos legais", icon: "shield" as const },
+  { id: "docs", label: "Documentos", icon: "file-text" as const, route: "/driver-docs" },
+  { id: "vehicle", label: "Meu veículo", icon: "truck" as const, route: "/driver-vehicle" },
+  { id: "tax", label: "Impostos e benefícios", icon: "briefcase" as const, route: "/driver-tax" },
+  { id: "help", label: "Ajuda e Suporte", icon: "help-circle" as const, route: "/help" },
+  { id: "legal", label: "Termos legais", icon: "shield" as const, route: "/legal" },
 ];
 
 export default function DriverAccountScreen() {
@@ -138,6 +138,7 @@ export default function DriverAccountScreen() {
           {SETTINGS.map((s, i) => (
             <Pressable
               key={s.id}
+              onPress={() => router.push(s.route as any)}
               style={({ pressed }) => [
                 styles.settingRow,
                 i > 0 && { borderTopColor: colors.border, borderTopWidth: 1 },
@@ -165,7 +166,7 @@ export default function DriverAccountScreen() {
         </Pressable>
 
         <Text style={[styles.version, { color: colors.mutedForeground }]}>
-          RideShare Motorista · v1.0.0
+          Paraúna Mobi Motorista · v1.0.0
         </Text>
       </ScrollView>
     </View>

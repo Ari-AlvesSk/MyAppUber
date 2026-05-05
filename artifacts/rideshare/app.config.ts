@@ -9,7 +9,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
   return {
     ...config,
-    name: "RideShare",
+    name: "Paraúna Mobi",
     slug: "rideshare",
     version: "1.0.0",
     orientation: "portrait",

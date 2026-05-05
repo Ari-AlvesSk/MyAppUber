@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/AuthContext";
 import type { DriverRequest } from "@/context/AuthContext";
+import { useLocation } from "@/context/LocationContext";
 import { useRides } from "@/context/RideContext";
 import { LeafletMap } from "@/components/LeafletMap";
 import { api } from "@/utils/api";
@@ -131,6 +132,7 @@ export default function AdminScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, logout, driverRequests, approveDriver, rejectDriver } = useAuth();
+  const { coords: adminCoords } = useLocation();
   const { platformRides } = useRides();
   const [mainTab, setMainTab] = useState<MainTab>("motoristas");
   const [driverFilter, setDriverFilter] = useState<DriverFilter>("pending");
@@ -535,8 +537,8 @@ export default function AdminScreen() {
           <View style={{ flex: 1, minHeight: 340 }}>
             <LeafletMap
               height={null}
-              lat={-16.0028}
-              lng={-49.7903}
+              lat={adminCoords?.latitude ?? -16.0028}
+              lng={adminCoords?.longitude ?? -49.7903}
               interactive={false}
               adminMode={true}
               driverMarkers={onlineDrivers.map((d) => ({

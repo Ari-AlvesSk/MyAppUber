@@ -189,7 +189,7 @@ export default function AccountScreen() {
           <Text style={[styles.signOutTxt, { color: colors.destructive }]}>Sair da conta</Text>
         </Pressable>
 
-        <Text style={[styles.version, { color: colors.mutedForeground }]}>RideShare · v1.0.0</Text>
+        <Text style={[styles.version, { color: colors.mutedForeground }]}>Paraúna Mobi · v1.0.0</Text>
       </ScrollView>
     </View>
   );

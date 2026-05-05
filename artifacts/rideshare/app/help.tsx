@@ -54,7 +54,7 @@ export default function HelpScreen() {
     Linking.openURL("https://wa.me/5511900000000").catch(() => {});
   };
   const openEmail = () => {
-    Linking.openURL("mailto:suporte@rideshare.com.br").catch(() => {});
+    Linking.openURL("mailto:suporte@paraunamobi.com.br").catch(() => {});
   };
 
   return (
@@ -100,7 +100,7 @@ export default function HelpScreen() {
           >
             <Feather name="mail" size={22} color="#3B82F6" />
             <Text style={[styles.contactLabel, { color: "#3B82F6" }]}>E-mail</Text>
-            <Text style={[styles.contactSub, { color: colors.mutedForeground }]}>suporte@rideshare.com.br</Text>
+            <Text style={[styles.contactSub, { color: colors.mutedForeground }]}>suporte@paraunamobi.com.br</Text>
           </Pressable>
         </View>
 
@@ -134,7 +134,7 @@ export default function HelpScreen() {
           <Feather name="star" size={20} color="#F59E0B" />
           <View style={{ flex: 1 }}>
             <Text style={[styles.rateTitle, { color: colors.foreground }]}>Avaliar o app</Text>
-            <Text style={[styles.rateSub, { color: colors.mutedForeground }]}>Sua opinião melhora o RideShare</Text>
+            <Text style={[styles.rateSub, { color: colors.mutedForeground }]}>Sua opinião melhora o Paraúna Mobi</Text>
           </View>
           <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
         </View>

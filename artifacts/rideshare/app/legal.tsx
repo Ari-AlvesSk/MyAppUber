@@ -15,11 +15,11 @@ import { useColors } from "@/hooks/useColors";
 
 const TERMS = `1. ACEITAÇÃO DOS TERMOS
 
-Ao utilizar o RideShare, você concorda com estes Termos de Uso. Se não concordar, não use o serviço.
+Ao utilizar o Paraúna Mobi, você concorda com estes Termos de Uso. Se não concordar, não use o serviço.
 
 2. DESCRIÇÃO DO SERVIÇO
 
-O RideShare é uma plataforma de intermediação entre passageiros e motoristas parceiros para prestação de serviços de transporte privado individual remunerado, conforme previsto na Lei nº 13.640/2018.
+O Paraúna Mobi é uma plataforma de intermediação entre passageiros e motoristas parceiros para prestação de serviços de transporte privado individual remunerado, conforme previsto na Lei nº 13.640/2018.
 
 3. CADASTRO E CONTA
 
@@ -27,7 +27,7 @@ Para usar o serviço, você deve fornecer informações verdadeiras, completas e
 
 4. USO DO SERVIÇO
 
-É proibido usar o RideShare para fins ilegais, fraudar o sistema de pagamentos, criar contas falsas ou prejudicar outros usuários e motoristas.
+É proibido usar o Paraúna Mobi para fins ilegais, fraudar o sistema de pagamentos, criar contas falsas ou prejudicar outros usuários e motoristas.
 
 5. PAGAMENTOS
 
@@ -43,7 +43,7 @@ Passageiros e motoristas podem se avaliar mutuamente após cada corrida. Avalia�
 
 8. RESPONSABILIDADE
 
-O RideShare atua como intermediador e não é responsável por danos decorrentes da prestação do serviço de transporte, que é de responsabilidade dos motoristas parceiros.
+O Paraúna Mobi atua como intermediador e não é responsável por danos decorrentes da prestação do serviço de transporte, que é de responsabilidade dos motoristas parceiros.
 
 9. PRIVACIDADE
 
@@ -53,7 +53,7 @@ O uso de seus dados pessoais é regido pela nossa Política de Privacidade, disp
 
 Estes termos podem ser alterados a qualquer momento. O uso continuado do serviço após as alterações implica na aceitação dos novos termos.`;
 
-const PRIVACY = `POLÍTICA DE PRIVACIDADE — RIDESHARE
+const PRIVACY = `POLÍTICA DE PRIVACIDADE — PARAÚNA MOBI
 
 Última atualização: 01 de janeiro de 2025
 
@@ -87,7 +87,7 @@ Utilizamos cookies e tecnologias similares para manter sua sessão e melhorar su
 
 8. CONTATO
 
-Para exercer seus direitos ou tirar dúvidas: privacidade@rideshare.com.br
+Para exercer seus direitos ou tirar dúvidas: privacidade@paraunamobi.com.br
 
 9. MENORES
 
@@ -146,7 +146,7 @@ export default function LegalScreen() {
               color={colors.accent}
             />
             <Text style={[styles.docTitle, { color: colors.foreground }]}>
-              {tab === "terms" ? "Termos de Uso — RideShare" : "Política de Privacidade — RideShare"}
+              {tab === "terms" ? "Termos de Uso — Paraúna Mobi" : "Política de Privacidade — Paraúna Mobi"}
             </Text>
           </View>
           <Text style={[styles.docText, { color: colors.foreground }]}>
