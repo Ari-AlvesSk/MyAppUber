@@ -15,6 +15,8 @@ const DEFAULT_SETTINGS = {
   commissionPercent: 20,
   pricePerKmCar: 2.5,
   pricePerKmMoto: 1.8,
+  minPriceCar: 8.0,
+  minPriceMoto: 5.0,
   stripePublishableKey: "",
   stripeSecretKey: "",
   updatedAt: Date.now(),
@@ -45,6 +47,8 @@ const settingsSchema = z.object({
   commissionPercent: z.number().min(0).max(50).optional(),
   pricePerKmCar: z.number().min(0).optional(),
   pricePerKmMoto: z.number().min(0).optional(),
+  minPriceCar: z.number().min(0).optional(),
+  minPriceMoto: z.number().min(0).optional(),
   stripePublishableKey: z.string().optional(),
   stripeSecretKey: z.string().optional(),
 });
@@ -85,6 +89,8 @@ router.get("/public", async (req, res) => {
       stripePublishableKey: doc.stripePublishableKey,
       pricePerKmCar: doc.pricePerKmCar ?? DEFAULT_SETTINGS.pricePerKmCar,
       pricePerKmMoto: doc.pricePerKmMoto ?? DEFAULT_SETTINGS.pricePerKmMoto,
+      minPriceCar: doc.minPriceCar ?? DEFAULT_SETTINGS.minPriceCar,
+      minPriceMoto: doc.minPriceMoto ?? DEFAULT_SETTINGS.minPriceMoto,
     });
   } catch (err) {
     req.log.error(err);

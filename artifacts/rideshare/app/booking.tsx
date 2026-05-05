@@ -66,6 +66,9 @@ export default function BookingScreen() {
         pricePerKmCents: o.tier === "moto"
           ? Math.round((s.pricePerKmMoto ?? 1.8) * 100)
           : Math.round((s.pricePerKmCar ?? 2.5) * 100),
+        minPriceCents: o.tier === "moto"
+          ? Math.round((s.minPriceMoto ?? 5.0) * 100)
+          : Math.round((s.minPriceCar ?? 8.0) * 100),
       })));
     }).catch(() => {});
   }, []);

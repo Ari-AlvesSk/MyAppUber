@@ -120,6 +120,7 @@ export const api = {
       pixEnabled: boolean; cardEnabled: boolean; cashEnabled: boolean;
       stripePublishableKey: string;
       pricePerKmCar: number; pricePerKmMoto: number;
+      minPriceCar: number; minPriceMoto: number;
     }>("/admin/payment-settings/public"),
 
   createPaymentIntent: (data: { rideId: string; amountCents: number; paymentType: "card" | "pix"; paymentMethodId?: string }) =>
@@ -136,6 +137,8 @@ export const api = {
       pixKey: string; pixKeyType: string;
       pixEnabled: boolean; cardEnabled: boolean; cashEnabled: boolean;
       cardFeePercent: number; commissionPercent: number;
+      pricePerKmCar: number; pricePerKmMoto: number;
+      minPriceCar: number; minPriceMoto: number;
       stripePublishableKey: string; stripeSecretKey: string;
     }>("/admin/payment-settings"),
 
