@@ -815,7 +815,7 @@ const s = StyleSheet.create({
   logoutBtn: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
 
   // Tabs
-  tabScroll: { borderBottomWidth: 1 },
+  tabScroll: { borderBottomWidth: 1, flexGrow: 0, flexShrink: 0 },
   tabs: { flexDirection: "row", paddingHorizontal: 8 },
   tab: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 13 },
   tabTxt: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
