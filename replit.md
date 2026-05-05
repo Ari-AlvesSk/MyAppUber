@@ -1,135 +1,62 @@
-# Workspace
+# Paraúna Mobi
 
-## Overview
+A ride-hailing (rideshare) app for Brazil: Expo mobile + web frontend for passengers/drivers/admin, backed by an Express API with MongoDB Atlas.
 
-pnpm workspace monorepo using TypeScript. Expo mobile rideshare app (pt-BR) with an Express API server backed by MongoDB Atlas.
+## Run & Operate
+
+- **Start everything**: Run the "Project" workflow (starts both API Server and RideShare App in parallel)
+- **API Server only**: `pnpm --filter @workspace/api-server run dev` (requires `PORT` env var, default 8080)
+- **RideShare App only**: `PORT=5000 pnpm --filter @workspace/rideshare exec expo start --web --port 5000`
+- **Typecheck all**: `pnpm run typecheck`
+- **Required env vars**: `MONGODB_URI` (secret), `MONGODB_DB`, `PORT`
 
 ## Stack
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
+- **Monorepo**: pnpm workspaces
+- **Node.js**: 20 (nodejs-20 module)
+- **API**: Express 5 + TypeScript (ESM), built with esbuild
 - **Database**: MongoDB Atlas via Mongoose (`lib/db`) — DB: `DbSistemaCaronaParaunaMobi`
 - **Validation**: Zod
-- **Build**: esbuild
-- **Mobile**: Expo Router (React Native + web)
+- **Mobile/Web**: Expo Router (React Native + react-native-web)
+- **Payments**: Stripe + Mercado Pago Pix
 
-## MongoDB Collections
+## Where things live
 
-- `usuarios` — user profiles (IUser model)
-- `corridas` — ride history (IRide model)
-- `pagamentos` — payment methods (IPayment model)
-- `saques` — withdrawal requests (IWithdrawal model)
+- `artifacts/api-server/src/` — Express API server source
+- `artifacts/api-server/src/routes/` — all route handlers
+- `artifacts/rideshare/app/` — Expo Router screens
+- `artifacts/rideshare/context/` — React contexts (Auth, Location, Ride, Notification)
+- `artifacts/rideshare/utils/api.ts` — API client (uses `/api` relative on web)
+- `lib/db/src/` — Mongoose models and `connectDB()`
+- `lib/db/src/models/` — User, Ride, Payment, Withdrawal, Coupon, PaymentSettings
 
-## Environment Variables
+## Architecture decisions
 
-- `MONGODB_URI` — MongoDB Atlas connection string (shared env)
-- `MONGODB_DB` — Database name: `DbSistemaCaronaParaunaMobi` (shared env)
+- The Expo app runs on port 5000 and the API runs on port 8080; on web, the Expo app calls `/api` (relative), which is served directly by the API server — no proxy needed since both run on Replit
+- `MONGODB_URI` is stored as a Replit secret (not plaintext); `MONGODB_DB` and `PORT` are shared env vars
+- Auth is custom (email+password with hashed storage in MongoDB) — no external auth provider
+- Payments use Stripe (card) + Mercado Pago (Pix QR code); keys stored per-deployment in MongoDB's `paymentSettings` collection via admin panel
+- Driver online tracking uses an in-memory store on the API server with 30s TTL (not persisted)
 
-## Replit Workflows
+## Product
 
-- **API Server** — runs `pnpm --filter @workspace/api-server run dev` on port 8080 (console output)
-- **RideShare App** — runs Expo web on port 5000 (webview output); scan the QR code from the Replit URL bar to test on a physical device via Expo Go
+- **Passengers**: Request rides, track in real time, pay via Pix/card/cash, apply coupons
+- **Drivers**: Go online/offline, accept rides, track earnings, request Pix withdrawals
+- **Admin**: Approve/reject driver registrations, view all rides, manage withdrawals, configure payment settings (Stripe keys, Pix key, pricing), view live driver map
 
-## Key Commands
+## User preferences
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm --filter @workspace/api-server run dev` — run API server locally (requires PORT env var)
-- Restart workflows from the Replit UI after code changes
+- App is in Brazilian Portuguese (pt-BR)
+- Theme: black background + lime green `#00D26A` accent
 
-## Artifacts
+## Gotchas
 
-### API Server (`artifacts/api-server`)
+- The app shows a location permission gate before login on web (expected behavior — dismiss or navigate to /login directly)
+- Mongoose logs duplicate index warnings for User model on startup — harmless, can be fixed by removing duplicate `index: true` declarations in the User schema
+- `REPLIT_EXPO_DEV_DOMAIN` is used for the Expo packager proxy URL in the dev script
 
-Express 5 server mounted at `/api`. Routes:
-- `GET/PUT /api/users/:id` — get / upsert user profile
-- `PATCH /api/users/:id/password` — update password hash
-- `POST /api/users/login` — authenticate user
-- `GET /api/rides?userId=` — user ride history
-- `GET /api/rides?driverId=` — driver ride history
-- `GET /api/rides/all` — admin: all platform rides
-- `POST /api/rides` — create ride
-- `PATCH /api/rides/:id` — update ride status/driver/completedAt
-- `GET /api/payments?userId=` — user payment methods
-- `POST /api/payments` — add payment method
-- `DELETE /api/payments/:id?userId=` — remove payment method
-- `GET /api/withdrawals` — all withdrawal requests (admin)
-- `GET /api/withdrawals?driverId=` — driver's own withdrawals
-- `POST /api/withdrawals` — driver creates withdrawal request
-- `PATCH /api/withdrawals/:id` — admin approves/rejects withdrawal
-- `POST /api/drivers/location` — driver posts real-time GPS location
-- `GET /api/drivers/online` — admin gets list of currently online drivers (in-memory, 30s TTL)
-- `GET /api/admin/payment-settings` — admin: get full payment settings (includes Stripe keys masked)
-- `GET /api/admin/payment-settings/public` — passenger: get public payment settings (pixKey, pixKeyType, enabled flags)
-- `PUT /api/admin/payment-settings` — admin: update payment settings (Pix key, rates, toggles, Stripe keys)
+## Pointers
 
-### RideShare App (`artifacts/rideshare`)
-
-Expo mobile app (pt-BR). Theme: black + lime `#00D26A`. Uses `useColors()` hook.
-
-**API client**: `utils/api.ts` — uses `/api` relative path on web.
-
-**Auth** (`context/AuthContext.tsx`):
-- Roles: `passenger` | `driver` | `admin`
-- Methods: `login`, `register`, `logout`, `updateUser`, `updatePassword`, `switchRole`, `approveDriver`, `rejectDriver`, `checkDriverStatus`
-
-**Withdrawal Logic** (`app/(driver)/earnings.tsx`):
-- Available balance = total completed ride earnings - R$2/trip app fee - pending/approved withdrawals
-- Cash tips excluded (already received directly)
-- Driver enters PIX key and requests withdrawal
-- Withdrawal history shown with status chips
-- On submit: `POST /api/withdrawals` creates pending request
-
-**Driver Location Tracking** (`app/(driver)/index.tsx`):
-- When online: posts GPS location every 10s to `POST /api/drivers/location`
-- When offline: sends online=false to remove from store
-- API server maintains in-memory store with 30s TTL
-
-**Admin Panel** (`app/admin.tsx`):
-- Redesigned header with ADMIN badge
-- 6 tabs: Motoristas | Viagens | Financeiro | Cupons | Mapa AO VIVO | Config.
-- Tab badges for pending items
-- Financeiro: 4 stat cards + withdrawal requests with approve/reject
-- Mapa AO VIVO: polls `GET /api/drivers/online` every 8s, shows online drivers as car/moto icons on Leaflet map
-- Config. (Configurações de Pagamento): Chave Pix, taxas/comissões, toggles de métodos (Pix/Cartão/Dinheiro), Stripe keys
-
-**Payment Settings** (`lib/db/src/models/paymentSettings.ts`):
-- MongoDB singleton: pixKey, pixKeyType, pixEnabled, cardEnabled, cashEnabled, cardFeePercent, commissionPercent, stripePublishableKey, stripeSecretKey, mercadoPagoAccessToken
-
-**Mercado Pago Pix Gateway** (`artifacts/api-server/src/routes/mercadopago.ts`):
-- `POST /api/mp/pix` — cria pagamento Pix MP, salva mpPaymentId na corrida, retorna qrCode + qrCodeBase64
-- `GET /api/mp/pix/:mpPaymentId/status` — verifica MP, auto-atualiza corrida para "searching" se approved
-- `POST /api/mp/webhook` — webhook MP para confirmação imediata
-- Se MP não configurado (token ausente) → booking.tsx usa chave Pix manual como fallback
-
-**Payment Methods** (`app/payment-methods.tsx`):
-- Tab selector: Pix | Cartão
-- Pix: tipo de chave (CPF/CNPJ/Telefone/E-mail/Aleatória) + campo de chave
-- Cartão: número formatado (XXXX XXXX XXXX XXXX), titular, validade MM/AA, detecção de bandeira (Visa/Mastercard/Elo/Amex)
-
-**Booking Pix Flow** (`app/booking.tsx`):
-- Corrida criada com status `"awaiting_pix"` → chama `POST /api/mp/pix` para gerar QR code MP
-- Modal mostra: spinner enquanto gera → QR code base64 (imagem) + código copia-e-cola → botão confirmar
-- Fallback automático: se MP falhar (token não configurado), mostra a chave Pix manual do admin
-- ride/[id].tsx: enquanto `awaiting_pix`, polls `GET /api/mp/pix/:mpPaymentId/status` a cada 5s; quando aprovado → corrida muda para "searching" automaticamente
-- Admin ainda pode confirmar manualmente (fallback) no tab Financeiro
-
-**Map** (`components/LeafletMap.web.tsx`):
-- `showAsVehicle + vehicleType` — renders car/moto SVG icon instead of dot for driver
-- `driverMarkers` — array of online drivers shown as car (blue) or moto (purple) icons with tooltips
-- `adminMode` — enables zoom controls, slightly zoomed out view
-- Dynamic update via `postMessage({ type: 'updateDriverMarkers', drivers })` without full re-render
-
-**Screens**:
-- `login`, `register` — auth
-- `(tabs)/index` — passenger home map with ride request button
-- `(tabs)/account` — passenger account menu
-- `(driver)/index` — driver home (online toggle + live location posting + car/moto map icon)
-- `(driver)/earnings` — earnings history + withdraw modal with PIX key input
-- `booking` — pickup/destination + tier selection + Pix payment gate modal
-- `ride/[id]` — live ride tracking screen
-- `location-picker` — interactive map + geocoding search
-- `admin` — admin panel: driver approvals, ride stats, withdrawals management, live driver map, payment settings
-- `payment-methods` — add/remove Pix keys and credit/debit cards; set default payment method
+- API routes: `artifacts/api-server/src/routes/index.ts`
+- DB models: `lib/db/src/models/`
+- Expo screens: `artifacts/rideshare/app/`
