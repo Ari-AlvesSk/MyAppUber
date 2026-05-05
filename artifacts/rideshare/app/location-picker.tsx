@@ -74,47 +74,114 @@ export default function LocationPickerScreen() {
   const placeholder = mode === "pickup" ? "Buscar origem em Paraúna..." : "Buscar destino em Paraúna...";
   const hint = mode === "pickup" ? "Toque para mudar a origem" : "Toque para escolher o destino";
 
+  // ── Nominatim helpers (much more accurate than expo-location geocoding on web) ──
+
+  const nominatimReverse = useCallback(async (lat: number, lng: number): Promise<{ label: string; address: string }> => {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=pt-BR`;
+    const res = await fetch(url, { headers: { "User-Agent": "ParaunaMobi/1.0" } });
+    if (!res.ok) throw new Error("nominatim error");
+    const data = await res.json() as {
+      address?: {
+        road?: string; house_number?: string;
+        suburb?: string; neighbourhood?: string; quarter?: string;
+        village?: string; town?: string; city?: string; municipality?: string; county?: string;
+        state?: string;
+      };
+    };
+    const a = data.address ?? {};
+    const street = [a.road, a.house_number].filter(Boolean).join(", ");
+    const neighborhood = a.suburb ?? a.neighbourhood ?? a.quarter ?? "";
+    const city = a.village ?? a.town ?? a.city ?? a.municipality ?? a.county ?? "Paraúna";
+    const stateRaw = a.state ?? "Goiás";
+    const stateAbbr = stateRaw === "Goiás" ? "GO" : stateRaw.slice(0, 2).toUpperCase();
+    const label = street || neighborhood || city;
+    const addrParts = [neighborhood || city, stateAbbr].filter(Boolean);
+    return { label, address: addrParts.join(", ") };
+  }, []);
+
   const handleMapTap = useCallback(async (lat: number, lng: number) => {
     if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
     setReversing(true);
     try {
-      const rev = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-      const r = rev[0];
-      const label = r
-        ? [r.street, r.streetNumber].filter(Boolean).join(", ") || r.district || r.city || "Local selecionado"
-        : "Local selecionado";
-      const addr = r
-        ? [r.district ?? r.subregion, r.city, r.region].filter(Boolean).join(", ") || "Paraúna, GO"
-        : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      const { label, address: addr } = await nominatimReverse(lat, lng);
       setSelected({ label, address: addr, lat, lng });
     } catch {
       setSelected({ label: "Local selecionado", address: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng });
     } finally {
       setReversing(false);
     }
-  }, []);
+  }, [nominatimReverse]);
 
   const searchAddress = useCallback(async (text: string) => {
     if (text.trim().length < 3) { setResults([]); return; }
     setSearching(true);
     try {
-      const raw = await Location.geocodeAsync(text + ", Paraúna, Goiás, Brasil");
-      const found: PickerResult[] = [];
-      for (const r of raw.slice(0, 6)) {
-        const rev = await Location.reverseGeocodeAsync({ latitude: r.latitude, longitude: r.longitude });
-        const rr = rev[0];
-        if (rr) {
-          found.push({
-            label: [rr.street, rr.streetNumber].filter(Boolean).join(", ") || rr.district || text,
-            address: [rr.district ?? rr.subregion, rr.city, rr.region].filter(Boolean).join(", ") || "Paraúna, GO",
-            lat: r.latitude,
-            lng: r.longitude,
-          });
+      // Viewbox ~40 km ao redor de Paraúna, GO — bounded=1 garante que só volta resultados dessa área
+      const viewbox = "-50.2,-15.65,-49.35,-16.35";
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(text + " Paraúna Goiás")}&viewbox=${viewbox}&bounded=1&limit=6&accept-language=pt-BR&addressdetails=1`;
+      const res = await fetch(url, { headers: { "User-Agent": "ParaunaMobi/1.0" } });
+      const raw = await res.json() as Array<{
+        lat: string; lon: string; display_name: string;
+        address?: {
+          road?: string; house_number?: string;
+          suburb?: string; neighbourhood?: string; quarter?: string;
+          village?: string; town?: string; city?: string; municipality?: string; county?: string;
+          state?: string;
+        };
+      }>;
+
+      if (raw.length === 0) {
+        // Fallback sem bounded — tenta achar algo em Goiás/Brasil
+        const url2 = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(text + ", Paraúna, Goiás, Brasil")}&limit=4&accept-language=pt-BR&addressdetails=1`;
+        const res2 = await fetch(url2, { headers: { "User-Agent": "ParaunaMobi/1.0" } });
+        const raw2 = await res2.json() as typeof raw;
+
+        // Filtra resultados a no máximo ~60 km de Paraúna
+        const PARAUNA_LAT = -16.0028;
+        const PARAUNA_LNG = -49.7903;
+        const nearby = raw2.filter((r) => {
+          const dlat = parseFloat(r.lat) - PARAUNA_LAT;
+          const dlng = parseFloat(r.lon) - PARAUNA_LNG;
+          return Math.sqrt(dlat * dlat + dlng * dlng) < 0.6; // ~60 km
+        });
+
+        if (nearby.length > 0) {
+          setResults(nearby.map((r) => {
+            const a = r.address ?? {};
+            const street = [a.road, a.house_number].filter(Boolean).join(", ");
+            const neighborhood = a.suburb ?? a.neighbourhood ?? a.quarter ?? "";
+            const city = a.village ?? a.town ?? a.city ?? a.municipality ?? "Paraúna";
+            const stateRaw = a.state ?? "Goiás";
+            const stateAbbr = stateRaw === "Goiás" ? "GO" : stateRaw.slice(0, 2).toUpperCase();
+            return {
+              label: street || neighborhood || city || text,
+              address: [neighborhood || city, stateAbbr].filter(Boolean).join(", "),
+              lat: parseFloat(r.lat),
+              lng: parseFloat(r.lon),
+            };
+          }));
+        } else {
+          setResults([]);
         }
+        return;
       }
-      setResults(found.length > 0 ? found : [{ label: text, address: "Paraúna, GO" }]);
+
+      setResults(raw.map((r) => {
+        const a = r.address ?? {};
+        const street = [a.road, a.house_number].filter(Boolean).join(", ");
+        const neighborhood = a.suburb ?? a.neighbourhood ?? a.quarter ?? "";
+        const city = a.village ?? a.town ?? a.city ?? a.municipality ?? "Paraúna";
+        const stateRaw = a.state ?? "Goiás";
+        const stateAbbr = stateRaw === "Goiás" ? "GO" : stateRaw.slice(0, 2).toUpperCase();
+        return {
+          label: street || neighborhood || city || text,
+          address: [neighborhood || city, stateAbbr].filter(Boolean).join(", "),
+          lat: parseFloat(r.lat),
+          lng: parseFloat(r.lon),
+        };
+      }));
     } catch {
-      setResults([{ label: text, address: "Paraúna, GO" }]);
+      setResults([]);
     } finally {
       setSearching(false);
     }
@@ -144,17 +211,12 @@ export default function LocationPickerScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const rev = await Location.reverseGeocodeAsync(pos.coords);
-      const r = rev[0];
-      const result: PickerResult = r
-        ? {
-            label: "Localização atual",
-            address: [r.district ?? r.subregion, r.city, r.region].filter(Boolean).join(", ") || gpsAddress,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          }
-        : { label: "Localização atual", address: gpsAddress, lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setSelected(result);
+      let addrStr = gpsAddress;
+      try {
+        const { address: nominatimAddr } = await nominatimReverse(pos.coords.latitude, pos.coords.longitude);
+        addrStr = nominatimAddr || gpsAddress;
+      } catch {}
+      setSelected({ label: "Localização atual", address: addrStr, lat: pos.coords.latitude, lng: pos.coords.longitude });
     } catch {
       if (coords) setSelected({ label: "Localização atual", address: gpsAddress, lat: coords.latitude, lng: coords.longitude });
     }
