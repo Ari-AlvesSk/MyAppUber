@@ -1,18 +1,30 @@
-import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 function getApiBase(): string {
-  if (Platform.OS === "web") return "/api";
-  const extra = Constants.expoConfig?.extra as { apiBase?: string } | undefined;
-  return extra?.apiBase ?? "/api";
+  if (Platform.OS === "web") {
+    return "/api";
+  }
+  // Native (Expo Go / device): needs absolute URL.
+  // EXPO_PUBLIC_DOMAIN is injected at build time via the dev script:
+  // EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  if (domain) return `https://${domain}/api`;
+  // Fallback: local dev on same machine
+  return "http://localhost:8080/api";
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const base = getApiBase();
-  const res = await fetch(`${base}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
-    ...options,
-  });
+  const url = `${base}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
+      ...options,
+    });
+  } catch (err) {
+    throw new Error(`Sem conexão com o servidor. Verifique sua internet.`);
+  }
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try {
