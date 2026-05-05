@@ -119,6 +119,7 @@ const patchSchema = z.object({
   driverId: z.string().optional(),
   completedAt: z.number().optional(),
   pixPaymentStatus: z.string().optional(),
+  mpPaymentId: z.string().optional(),
 });
 
 router.patch("/:id", async (req, res) => {
@@ -133,6 +134,7 @@ router.patch("/:id", async (req, res) => {
     if (parsed.data.completedAt !== undefined)
       set["completedAt"] = new Date(parsed.data.completedAt);
     if (parsed.data.pixPaymentStatus !== undefined) set["pixPaymentStatus"] = parsed.data.pixPaymentStatus;
+    if (parsed.data.mpPaymentId !== undefined) set["mpPaymentId"] = parsed.data.mpPaymentId;
 
     const ride = await RideModel.findByIdAndUpdate(req.params.id, { $set: set }, { new: false }).lean();
 

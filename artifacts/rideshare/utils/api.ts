@@ -145,4 +145,12 @@ export const api = {
 
   updateAdminPaymentSettings: (data: Record<string, unknown>) =>
     request<{ ok: boolean }>("/admin/payment-settings", { method: "PUT", body: JSON.stringify(data) }),
+
+  createMpPix: (data: { rideId: string; amountCents: number; description?: string; payerEmail?: string }) =>
+    request<{ mpPaymentId: string; qrCode: string; qrCodeBase64: string; ticketUrl: string; status: string }>(
+      "/mp/pix", { method: "POST", body: JSON.stringify(data) },
+    ),
+
+  getMpPixStatus: (mpPaymentId: string) =>
+    request<{ status: string; approved: boolean }>(`/mp/pix/${mpPaymentId}/status`),
 };

@@ -15,6 +15,7 @@ export interface IPaymentSettings {
   minPriceMoto: number;
   stripePublishableKey: string;
   stripeSecretKey: string;
+  mercadoPagoAccessToken: string;
   updatedAt: number;
 }
 
@@ -34,6 +35,7 @@ const paymentSettingsSchema = new Schema<IPaymentSettings>(
     minPriceMoto: { type: Number, default: 5.0 },
     stripePublishableKey: { type: String, default: "" },
     stripeSecretKey: { type: String, default: "" },
+    mercadoPagoAccessToken: { type: String, default: "" },
     updatedAt: { type: Number, default: () => Date.now() },
   },
   { _id: false, collection: "configuracoes_pagamento" },

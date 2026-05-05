@@ -96,8 +96,13 @@ Expo mobile app (pt-BR). Theme: black + lime `#00D26A`. Uses `useColors()` hook.
 - Config. (Configurações de Pagamento): Chave Pix, taxas/comissões, toggles de métodos (Pix/Cartão/Dinheiro), Stripe keys
 
 **Payment Settings** (`lib/db/src/models/paymentSettings.ts`):
-- MongoDB singleton: pixKey, pixKeyType, pixEnabled, cardEnabled, cashEnabled, cardFeePercent, commissionPercent, stripePublishableKey, stripeSecretKey
-- Recommended gateway: Stripe (suporta Pix + BRL + cartões)
+- MongoDB singleton: pixKey, pixKeyType, pixEnabled, cardEnabled, cashEnabled, cardFeePercent, commissionPercent, stripePublishableKey, stripeSecretKey, mercadoPagoAccessToken
+
+**Mercado Pago Pix Gateway** (`artifacts/api-server/src/routes/mercadopago.ts`):
+- `POST /api/mp/pix` — cria pagamento Pix MP, salva mpPaymentId na corrida, retorna qrCode + qrCodeBase64
+- `GET /api/mp/pix/:mpPaymentId/status` — verifica MP, auto-atualiza corrida para "searching" se approved
+- `POST /api/mp/webhook` — webhook MP para confirmação imediata
+- Se MP não configurado (token ausente) → booking.tsx usa chave Pix manual como fallback
 
 **Payment Methods** (`app/payment-methods.tsx`):
 - Tab selector: Pix | Cartão
@@ -105,10 +110,11 @@ Expo mobile app (pt-BR). Theme: black + lime `#00D26A`. Uses `useColors()` hook.
 - Cartão: número formatado (XXXX XXXX XXXX XXXX), titular, validade MM/AA, detecção de bandeira (Visa/Mastercard/Elo/Amex)
 
 **Booking Pix Flow** (`app/booking.tsx`):
-- Pagamento Pix: busca chave Pix da plataforma via `getPublicPaymentSettings`, mostra no modal com botão copiar
-- Corrida criada com status `"awaiting_pix"` (invisível para motoristas)
-- "Já realizei o pagamento" navega para ride/[id] com estado de espera; motorista só é acionado após admin confirmar
-- Pagamento cartão: corrida criada diretamente com status `"searching"` (cobrança via Stripe quando integrado)
+- Corrida criada com status `"awaiting_pix"` → chama `POST /api/mp/pix` para gerar QR code MP
+- Modal mostra: spinner enquanto gera → QR code base64 (imagem) + código copia-e-cola → botão confirmar
+- Fallback automático: se MP falhar (token não configurado), mostra a chave Pix manual do admin
+- ride/[id].tsx: enquanto `awaiting_pix`, polls `GET /api/mp/pix/:mpPaymentId/status` a cada 5s; quando aprovado → corrida muda para "searching" automaticamente
+- Admin ainda pode confirmar manualmente (fallback) no tab Financeiro
 
 **Map** (`components/LeafletMap.web.tsx`):
 - `showAsVehicle + vehicleType` — renders car/moto SVG icon instead of dot for driver

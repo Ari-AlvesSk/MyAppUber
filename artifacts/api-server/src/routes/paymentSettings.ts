@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
   minPriceMoto: 5.0,
   stripePublishableKey: "",
   stripeSecretKey: "",
+  mercadoPagoAccessToken: "",
   updatedAt: Date.now(),
 };
 
@@ -29,7 +30,11 @@ router.get("/", async (req, res) => {
     if (!doc) {
       doc = await PaymentSettingsModel.create(DEFAULT_SETTINGS);
     }
-    const safe = { ...doc, stripeSecretKey: doc.stripeSecretKey ? "***" : "" };
+    const safe = {
+      ...doc,
+      stripeSecretKey: doc.stripeSecretKey ? "***" : "",
+      mercadoPagoAccessToken: doc.mercadoPagoAccessToken ? "***" : "",
+    };
     return res.json(safe);
   } catch (err) {
     req.log.error(err);
@@ -51,6 +56,7 @@ const settingsSchema = z.object({
   minPriceMoto: z.number().min(0).optional(),
   stripePublishableKey: z.string().optional(),
   stripeSecretKey: z.string().optional(),
+  mercadoPagoAccessToken: z.string().optional(),
 });
 
 // PUT /api/admin/payment-settings
@@ -60,15 +66,14 @@ router.put("/", async (req, res) => {
 
   try {
     const update: Record<string, unknown> = { ...parsed.data, updatedAt: Date.now() };
-    if (parsed.data.stripeSecretKey === "***") {
-      delete update.stripeSecretKey;
-    }
+    if (parsed.data.stripeSecretKey === "***") delete update.stripeSecretKey;
+    if (parsed.data.mercadoPagoAccessToken === "***") delete update.mercadoPagoAccessToken;
     const doc = await PaymentSettingsModel.findByIdAndUpdate(
       "singleton",
       { $set: update },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     ).lean();
-    return res.json({ ok: true, settings: { ...doc, stripeSecretKey: doc?.stripeSecretKey ? "***" : "" } });
+    return res.json({ ok: true, settings: { ...doc, stripeSecretKey: doc?.stripeSecretKey ? "***" : "", mercadoPagoAccessToken: doc?.mercadoPagoAccessToken ? "***" : "" } });
   } catch (err) {
     req.log.error(err);
     return res.status(500).json({ error: "Internal error" });

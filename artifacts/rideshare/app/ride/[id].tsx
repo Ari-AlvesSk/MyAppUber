@@ -34,6 +34,7 @@ export default function RideScreen() {
   const pulse = useRef(new Animated.Value(0)).current;
   const [etaSeconds, setEtaSeconds] = useState<number>(180);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [mpPaymentId, setMpPaymentId] = useState<string | null>(null);
 
   // Poll for ride status updates from server
   useEffect(() => {
@@ -46,6 +47,9 @@ export default function RideScreen() {
         const serverRide = await api.getRideById(params.id) as Record<string, unknown>;
         const serverStatus = String(serverRide["status"] ?? "");
         const serverDriver = serverRide["driver"] as Driver | null | undefined;
+
+        const serverMpId = serverRide["mpPaymentId"] as string | null | undefined;
+        if (serverMpId && !mpPaymentId) setMpPaymentId(serverMpId);
 
         if (serverStatus && serverStatus !== ride.status) {
           const patch: Partial<Ride> = { status: serverStatus as Ride["status"] };
@@ -73,7 +77,26 @@ export default function RideScreen() {
     poll();
     const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
-  }, [params.id, ride?.status, updateRide]);
+  }, [params.id, ride?.status, updateRide, mpPaymentId]);
+
+  // Poll Mercado Pago to auto-confirm Pix payment
+  useEffect(() => {
+    if (!mpPaymentId) return;
+    if (ride?.status !== "awaiting_pix") return;
+
+    const pollMp = async () => {
+      try {
+        const result = await api.getMpPixStatus(mpPaymentId);
+        if (result.approved) {
+          updateRide(params.id, { status: "searching" });
+        }
+      } catch {}
+    };
+
+    pollMp();
+    const interval = setInterval(pollMp, 5000);
+    return () => clearInterval(interval);
+  }, [mpPaymentId, ride?.status, params.id, updateRide]);
 
   useEffect(() => {
     if (!ride) return;

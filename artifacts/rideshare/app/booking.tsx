@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -21,6 +22,7 @@ import { PlaceRow } from "@/components/PlaceRow";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { RideOptionRow } from "@/components/RideOptionRow";
 import { useLocation } from "@/context/LocationContext";
+import { useAuth } from "@/context/AuthContext";
 import { useRides } from "@/context/RideContext";
 import {
   registerPickupCallback,
@@ -54,6 +56,7 @@ export default function BookingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ destinationId?: string }>();
+  const { user } = useAuth();
   const { addRide, defaultPaymentId, setDefaultPayment, payments, rides } = useRides();
   const { address, coords, loading: locLoading, requestPermission } = useLocation();
 
@@ -101,6 +104,9 @@ export default function BookingScreen() {
   const [showPixModal, setShowPixModal] = useState(false);
   const [pixCopied, setPixCopied] = useState(false);
   const [pendingRideId, setPendingRideId] = useState<string | null>(null);
+  const [mpPixData, setMpPixData] = useState<{ mpPaymentId: string; qrCode: string; qrCodeBase64: string } | null>(null);
+  const [mpPixLoading, setMpPixLoading] = useState(false);
+  const [mpPixError, setMpPixError] = useState<string | null>(null);
 
   const selectedPaymentId = tempPaymentId ?? defaultPaymentId;
   const selectedPayment = payments.find((p) => p.id === selectedPaymentId) ?? payments[0];
@@ -236,11 +242,26 @@ export default function BookingScreen() {
 
     try {
       if (isPixPayment) {
-        // Cria a corrida com status awaiting_pix (aguarda confirmação do admin)
         const rideId = await createRideRecord("awaiting_pix");
         setPendingRideId(rideId);
+        setMpPixData(null);
+        setMpPixError(null);
+        setMpPixLoading(true);
         setRequesting(false);
         setShowPixModal(true);
+        // Gera QR Pix via Mercado Pago em background
+        api.createMpPix({
+          rideId,
+          amountCents: finalPriceCents,
+          description: `Corrida ParaunaMobi — ${selectedOption.name}`,
+          payerEmail: user?.email ?? "passageiro@paraunamobi.com",
+        }).then((result) => {
+          setMpPixData({ mpPaymentId: result.mpPaymentId, qrCode: result.qrCode, qrCodeBase64: result.qrCodeBase64 });
+          setMpPixLoading(false);
+        }).catch((err) => {
+          setMpPixError(err?.message ?? "Erro ao gerar Pix");
+          setMpPixLoading(false);
+        });
         return;
       }
 
@@ -271,7 +292,7 @@ export default function BookingScreen() {
   };
 
   const copyPixCode = () => {
-    const code = platformPixKey ?? "";
+    const code = mpPixData?.qrCode ?? platformPixKey ?? "";
     if (Platform.OS === "web") {
       try { (navigator as any).clipboard?.writeText(code); } catch {}
     } else {
@@ -520,7 +541,9 @@ export default function BookingScreen() {
               </View>
               <Text style={[styles.pixTitle, { color: colors.foreground }]}>Pagamento via Pix</Text>
               <Text style={[styles.pixSubtitle, { color: colors.mutedForeground }]}>
-                Copie a chave Pix abaixo, pague pelo seu banco e clique em confirmar. O motorista só é acionado após verificação.
+                {mpPixData
+                  ? "Escaneie o QR code ou copie o código e pague pelo seu banco. O motorista é chamado automaticamente."
+                  : "Copie a chave Pix abaixo e pague pelo seu banco. O motorista é acionado após confirmação."}
               </Text>
             </View>
 
@@ -529,8 +552,60 @@ export default function BookingScreen() {
               <Text style={[styles.pixAmount, { color: colors.accent }]}>{formatPrice(finalPriceCents)}</Text>
             </View>
 
-            {platformPixKey ? (
+            {/* Loading state */}
+            {mpPixLoading && (
+              <View style={{ alignItems: "center", paddingVertical: 20, gap: 10 }}>
+                <ActivityIndicator color={colors.accent} size="large" />
+                <Text style={[styles.pixInfoTxt, { color: colors.mutedForeground }]}>Gerando código Pix via Mercado Pago...</Text>
+              </View>
+            )}
+
+            {/* MP Pix QR code */}
+            {!mpPixLoading && mpPixData && (
               <>
+                {mpPixData.qrCodeBase64 ? (
+                  <View style={{ alignItems: "center", paddingVertical: 8 }}>
+                    <Image
+                      source={{ uri: `data:image/png;base64,${mpPixData.qrCodeBase64}` }}
+                      style={{ width: 180, height: 180, borderRadius: 8 }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                ) : null}
+                <Text style={[styles.pixKeyLabel, { color: colors.mutedForeground }]}>CÓDIGO PIX — COPIA E COLA</Text>
+                <View style={[styles.pixKeyBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                  <TextInput
+                    value={mpPixData.qrCode}
+                    editable={false}
+                    selectTextOnFocus
+                    multiline
+                    numberOfLines={2}
+                    style={[styles.pixKeyValue, { color: colors.foreground, flex: 1, fontSize: 11 }]}
+                  />
+                  <Pressable
+                    onPress={copyPixCode}
+                    style={({ pressed }) => [styles.pixCopyBtn, { backgroundColor: pixCopied ? colors.accent : colors.accent + "22", opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <Feather name={pixCopied ? "check" : "copy"} size={15} color={pixCopied ? colors.accentForeground : colors.accent} />
+                    <Text style={[styles.pixCopyTxt, { color: pixCopied ? colors.accentForeground : colors.accent }]}>
+                      {pixCopied ? "Copiado!" : "Copiar"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+
+            {/* Fallback: manual Pix key (when MP not configured) */}
+            {!mpPixLoading && !mpPixData && platformPixKey && (
+              <>
+                {mpPixError && (
+                  <View style={[styles.pixInfoBox, { backgroundColor: "#FEF3C722", borderWidth: 1, borderColor: "#F59E0B44" }]}>
+                    <Feather name="alert-triangle" size={13} color="#F59E0B" />
+                    <Text style={[styles.pixInfoTxt, { color: "#F59E0B" }]}>
+                      QR automático indisponível. Use a chave Pix abaixo:
+                    </Text>
+                  </View>
+                )}
                 <Text style={[styles.pixKeyLabel, { color: colors.mutedForeground }]}>
                   CHAVE PIX — {platformPixKeyType.toUpperCase()}
                 </Text>
@@ -552,11 +627,14 @@ export default function BookingScreen() {
                   </Pressable>
                 </View>
               </>
-            ) : (
+            )}
+
+            {/* No Pix configured at all */}
+            {!mpPixLoading && !mpPixData && !platformPixKey && mpPixError && (
               <View style={[styles.pixInfoBox, { backgroundColor: "#FEF3C722", borderWidth: 1, borderColor: "#F59E0B44" }]}>
                 <Feather name="alert-triangle" size={13} color="#F59E0B" />
                 <Text style={[styles.pixInfoTxt, { color: "#F59E0B" }]}>
-                  Chave Pix não configurada. Contate o administrador do app.
+                  {mpPixError}. Configure o Mercado Pago no painel admin.
                 </Text>
               </View>
             )}
@@ -564,22 +642,29 @@ export default function BookingScreen() {
             <View style={[styles.pixInfoBox, { backgroundColor: colors.muted }]}>
               <Feather name="shield" size={13} color={colors.mutedForeground} />
               <Text style={[styles.pixInfoTxt, { color: colors.mutedForeground }]}>
-                Após confirmar, o pagamento será verificado pelo administrador antes de acionar o motorista.
+                {mpPixData
+                  ? "Pagamento verificado automaticamente. O motorista é chamado assim que confirmado."
+                  : "Após confirmar, o pagamento será verificado antes de acionar o motorista."}
               </Text>
             </View>
 
-            <Pressable
-              onPress={platformPixKey ? handlePixConfirm : undefined}
-              style={({ pressed }) => [styles.pixConfirmBtn, {
-                backgroundColor: platformPixKey ? colors.accent : colors.muted,
-                opacity: pressed ? 0.85 : 1,
-              }]}
-            >
-              <Feather name="check-circle" size={18} color={platformPixKey ? colors.accentForeground : colors.mutedForeground} />
-              <Text style={[styles.pixConfirmTxt, { color: platformPixKey ? colors.accentForeground : colors.mutedForeground }]}>
-                Já realizei o pagamento
-              </Text>
-            </Pressable>
+            {(() => {
+              const canConfirm = !mpPixLoading && (!!mpPixData || !!platformPixKey);
+              return (
+                <Pressable
+                  onPress={canConfirm ? handlePixConfirm : undefined}
+                  style={({ pressed }) => [styles.pixConfirmBtn, {
+                    backgroundColor: canConfirm ? colors.accent : colors.muted,
+                    opacity: pressed ? 0.85 : 1,
+                  }]}
+                >
+                  <Feather name="check-circle" size={18} color={canConfirm ? colors.accentForeground : colors.mutedForeground} />
+                  <Text style={[styles.pixConfirmTxt, { color: canConfirm ? colors.accentForeground : colors.mutedForeground }]}>
+                    Já realizei o pagamento
+                  </Text>
+                </Pressable>
+              );
+            })()}
             <Pressable
               onPress={() => setShowPixModal(false)}
               style={({ pressed }) => [styles.pixCancelBtn, { opacity: pressed ? 0.6 : 1 }]}

@@ -198,6 +198,7 @@ export default function AdminScreen() {
     pricePerKmCar: "2.50", pricePerKmMoto: "1.80",
     minPriceCar: "8.00", minPriceMoto: "5.00",
     stripePublishableKey: "", stripeSecretKey: "",
+    mercadoPagoAccessToken: "",
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -331,6 +332,7 @@ export default function AdminScreen() {
         minPriceMoto: String(data.minPriceMoto ?? 5.0),
         stripePublishableKey: data.stripePublishableKey ?? "",
         stripeSecretKey: data.stripeSecretKey === "***" ? "" : (data.stripeSecretKey ?? ""),
+        mercadoPagoAccessToken: (data as any).mercadoPagoAccessToken === "***" ? "" : ((data as any).mercadoPagoAccessToken ?? ""),
       });
       setSettingsLoaded(true);
     } catch {}
@@ -1059,40 +1061,30 @@ export default function AdminScreen() {
             ))}
           </View>
 
-          {/* Gateway Stripe */}
+          {/* Gateway Mercado Pago */}
           <View style={[s.cfgCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={s.cfgCardHeader}>
-              <View style={[s.cfgIconBox, { backgroundColor: "#635BFF22" }]}>
-                <Feather name="shield" size={16} color="#635BFF" />
+              <View style={[s.cfgIconBox, { backgroundColor: "#00B1EA22" }]}>
+                <Feather name="zap" size={16} color="#00B1EA" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[s.cfgCardTitle, { color: colors.foreground }]}>Gateway de Pagamento · Stripe</Text>
-                <Text style={[s.cfgCardSub, { color: colors.mutedForeground }]}>Para cobrar cartões automaticamente</Text>
+                <Text style={[s.cfgCardTitle, { color: colors.foreground }]}>Gateway · Mercado Pago</Text>
+                <Text style={[s.cfgCardSub, { color: colors.mutedForeground }]}>Pagamento Pix automático com QR code gerado</Text>
               </View>
             </View>
-            <View style={[s.cfgInfoRow, { backgroundColor: "#635BFF11", borderColor: "#635BFF33" }]}>
-              <Feather name="info" size={13} color="#635BFF" />
-              <Text style={[s.cfgInfoTxt, { color: "#635BFF" }]}>
-                Recomendamos o Stripe: suporta Pix, cartões em BRL e é amplamente utilizado no Brasil. Acesse dashboard.stripe.com para criar sua conta e obter as chaves.
+            <View style={[s.cfgInfoRow, { backgroundColor: "#00B1EA11", borderColor: "#00B1EA33" }]}>
+              <Feather name="info" size={13} color="#00B1EA" />
+              <Text style={[s.cfgInfoTxt, { color: "#00B1EA" }]}>
+                Acesse mercadopago.com.br → Desenvolvedores → Credenciais e copie seu Access Token de produção (APP_USR-...).
               </Text>
             </View>
-            <Text style={[s.lbl, { color: colors.mutedForeground }]}>CHAVE PÚBLICA (pk_live_...)</Text>
+            <Text style={[s.lbl, { color: colors.mutedForeground }]}>ACCESS TOKEN (APP_USR-...)</Text>
             <TextInput
               style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-              placeholder="pk_live_..."
+              placeholder="APP_USR-000000000000000-000000-..."
               placeholderTextColor={colors.mutedForeground}
-              value={paySettingsForm.stripePublishableKey}
-              onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, stripePublishableKey: v }))}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text style={[s.lbl, { color: colors.mutedForeground }]}>CHAVE SECRETA (sk_live_...)</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-              placeholder="sk_live_..."
-              placeholderTextColor={colors.mutedForeground}
-              value={paySettingsForm.stripeSecretKey}
-              onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, stripeSecretKey: v }))}
+              value={paySettingsForm.mercadoPagoAccessToken}
+              onChangeText={(v) => setPaySettingsForm((p) => ({ ...p, mercadoPagoAccessToken: v }))}
               autoCapitalize="none"
               autoCorrect={false}
               secureTextEntry

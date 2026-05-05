@@ -8,6 +8,7 @@ import driversRouter from "./drivers";
 import couponsRouter from "./coupons";
 import paymentSettingsRouter from "./paymentSettings";
 import stripeRouter from "./stripe";
+import mpRouter from "./mercadopago";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use("/drivers", driversRouter);
 router.use("/coupons", couponsRouter);
 router.use("/admin/payment-settings", paymentSettingsRouter);
 router.use("/stripe", stripeRouter);
+router.use("/mp", mpRouter);
 
 export default router;
