@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { MapCanvas } from "@/components/MapCanvas";
+import { LeafletMap } from "@/components/LeafletMap";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useRides } from "@/context/RideContext";
 import { formatDistanceKm, formatPrice } from "@/data/mock";
@@ -126,10 +126,16 @@ export default function RideScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.mapWrap, { paddingTop: insets.top }]}>
-        <MapCanvas
+        <LeafletMap
           height={420}
+          lat={ride.pickup.lat ?? -16.0028}
+          lng={ride.pickup.lng ?? -49.7903}
+          originLat={ride.pickup.lat}
+          originLng={ride.pickup.lng}
+          destLat={ride.dropoff.lat}
+          destLng={ride.dropoff.lng}
           showRoute={ride.status !== "completed"}
-          showCar={ride.status === "arriving" || ride.status === "in_progress"}
+          interactive={false}
         />
         <Pressable
           onPress={() => router.replace("/(tabs)")}

@@ -32,6 +32,7 @@ import {
   SUGGESTED_PLACES,
   computePriceCents,
   estimateDistanceKm,
+  haversineDistanceKm,
   formatDistanceKm,
   formatPrice,
 } from "@/data/mock";
@@ -150,10 +151,17 @@ export default function BookingScreen() {
     () => RIDE_OPTIONS.find((o) => o.tier === selectedTier)!,
     [selectedTier],
   );
-  const distanceKm = useMemo(
-    () => (destination ? estimateDistanceKm(destination.id) : 0),
-    [destination],
-  );
+  const distanceKm = useMemo(() => {
+    if (!destination) return 0;
+    // Use real GPS coordinates when available
+    if (
+      pickup.lat != null && pickup.lng != null &&
+      destination.lat != null && destination.lng != null
+    ) {
+      return haversineDistanceKm(pickup.lat, pickup.lng, destination.lat, destination.lng);
+    }
+    return estimateDistanceKm(destination.id);
+  }, [destination, pickup.lat, pickup.lng]);
   const tripDurationMin = Math.max(3, Math.round(distanceKm * 2.4));
   const selectedPriceCents = useMemo(
     () => computePriceCents(distanceKm, selectedOption.pricePerKmCents, selectedOption.minPriceCents),

@@ -24,7 +24,10 @@ const LocationContext = createContext<LocationState | null>(null);
 const DEFAULT_COORDS = { latitude: -16.0028, longitude: -49.7903 };
 const DEFAULT_ADDRESS = "Paraúna, GO";
 
-function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
+function distanceMeters(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+) {
   const R = 6371000;
   const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
   const dLng = ((b.longitude - a.longitude) * Math.PI) / 180;
@@ -36,10 +39,57 @@ function distanceMeters(a: { latitude: number; longitude: number }, b: { latitud
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+// Uses Nominatim (OpenStreetMap) which is much more accurate than
+// expo-location's reverseGeocode for small interior Brazilian cities like Paraúna.
+async function nominatimReverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<{ address: string; neighborhood: string; city: string }> {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=pt-BR`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "ParaunaMobi/1.0" },
+  });
+  if (!res.ok) throw new Error("Nominatim error");
+  const data = await res.json() as {
+    address?: {
+      suburb?: string;
+      neighbourhood?: string;
+      quarter?: string;
+      village?: string;
+      town?: string;
+      city?: string;
+      municipality?: string;
+      county?: string;
+      state?: string;
+      road?: string;
+    };
+    display_name?: string;
+  };
+  const a = data.address ?? {};
+  const neighborhood = a.suburb ?? a.neighbourhood ?? a.quarter ?? a.road ?? "";
+  const city =
+    a.village ?? a.town ?? a.city ?? a.municipality ?? a.county ?? "Paraúna";
+  const stateRaw = a.state ?? "Goiás";
+  const stateAbbr =
+    stateRaw.length <= 2
+      ? stateRaw.toUpperCase()
+      : stateRaw === "Goiás"
+      ? "GO"
+      : stateRaw.slice(0, 2).toUpperCase();
+  const parts = [neighborhood, city].filter(Boolean);
+  const address =
+    parts.length > 0
+      ? `${parts.join(", ")}, ${stateAbbr}`
+      : `${city}, ${stateAbbr}`;
+  return { address, neighborhood, city };
+}
+
 export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [granted, setGranted] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
-  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(DEFAULT_COORDS);
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(
+    DEFAULT_COORDS,
+  );
   const [address, setAddress] = useState(DEFAULT_ADDRESS);
   const [neighborhood, setNeighborhood] = useState("");
   const [city, setCity] = useState("Paraúna");
@@ -53,21 +103,28 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
   const reverseGeocode = useCallback(async (lat: number, lng: number) => {
     try {
-      const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-      const r = results[0];
-      if (r) {
-        const nb = r.district ?? r.subregion ?? r.street ?? "";
-        const ct = r.city ?? r.region ?? "Paraúna";
-        const state = r.region ?? "GO";
-        setNeighborhood(nb);
-        setCity(ct || "Paraúna");
-        const parts = [nb, ct || "Paraúna"].filter(Boolean);
-        const stateAbbr = state.length > 3 ? state.slice(0, 2).toUpperCase() : state.toUpperCase();
-        setAddress(parts.length > 0 ? `${parts.join(", ")}${stateAbbr ? ", " + stateAbbr : ""}` : DEFAULT_ADDRESS);
-        return;
-      }
-      setFallback();
+      // Try Nominatim first (more accurate for small Brazilian cities)
+      const result = await nominatimReverseGeocode(lat, lng);
+      setNeighborhood(result.neighborhood);
+      setCity(result.city);
+      setAddress(result.address);
     } catch {
+      // Fallback to expo-location
+      try {
+        const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        const r = results[0];
+        if (r) {
+          const nb = r.district ?? r.subregion ?? r.street ?? "";
+          const ct = r.city ?? r.region ?? "Paraúna";
+          const state = r.region ?? "GO";
+          setNeighborhood(nb);
+          setCity(ct || "Paraúna");
+          const parts = [nb, ct || "Paraúna"].filter(Boolean);
+          const stateAbbr = state.length > 3 ? state.slice(0, 2).toUpperCase() : state.toUpperCase();
+          setAddress(parts.length > 0 ? `${parts.join(", ")}, ${stateAbbr}` : DEFAULT_ADDRESS);
+          return;
+        }
+      } catch {}
       setFallback();
     }
   }, [setFallback]);
@@ -118,7 +175,10 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   }, [fetchLocation, setFallback]);
 
   const value = useMemo<LocationState>(
-    () => ({ granted, loading, coords, address, neighborhood, city, requestPermission, refresh, distanceMeters }),
+    () => ({
+      granted, loading, coords, address, neighborhood, city,
+      requestPermission, refresh, distanceMeters,
+    }),
     [granted, loading, coords, address, neighborhood, city, requestPermission, refresh],
   );
 

@@ -14,7 +14,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { MapCanvas } from "@/components/MapCanvas";
+import { LeafletMap } from "@/components/LeafletMap";
+import { useLocation } from "@/context/LocationContext";
 import { useAuth } from "@/context/AuthContext";
 import { formatPrice, RIDE_OPTIONS } from "@/data/mock";
 import { useColors } from "@/hooks/useColors";
@@ -41,6 +42,7 @@ export default function DriverHomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { coords } = useLocation();
   const [online, setOnline] = useState(false);
   const [pendingRide, setPendingRide] = useState<PendingRide | null>(null);
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
@@ -229,7 +231,13 @@ export default function DriverHomeScreen() {
 
         {/* Map */}
         <View style={[styles.mapWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <MapCanvas height={260} showRoute={activeRide?.status === "arriving" || activeRide?.status === "in_progress"} />
+          <LeafletMap
+            height={260}
+            lat={coords?.latitude ?? -16.0028}
+            lng={coords?.longitude ?? -49.7903}
+            interactive={false}
+            showRoute={false}
+          />
           <View style={styles.pulseWrap} pointerEvents="none">
             {online && (
               <Animated.View style={[styles.pulse, { backgroundColor: colors.accent, transform: [{ scale: pulse }], opacity: pulse.interpolate({ inputRange: [1, 1.5], outputRange: [0.5, 0] }) }]} />

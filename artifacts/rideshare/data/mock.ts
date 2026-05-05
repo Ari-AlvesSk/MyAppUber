@@ -86,29 +86,50 @@ export function formatPrice(cents: number): string {
 }
 
 export function formatDistanceKm(km: number): string {
+  if (km < 0.1) return "< 0,1 km";
   return `${km.toFixed(1).replace(".", ",")} km`;
 }
 
-const PLACE_DISTANCE_OVERRIDES: Record<string, number> = {
-  current: 0,
-  home: 1.2,
-  work: 0.8,
-  s1: 0.3,
-  s2: 0.7,
-  s3: 0.4,
-  s4: 0.5,
-  s5: 0.3,
-};
+/** Real Haversine distance between two GPS coordinates, in km. */
+export function haversineDistanceKm(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  // Add ~20% factor to approximate road distance vs straight line
+  return R * c * 1.2;
+}
 
+/** Fallback: estimate distance when coords are missing (legacy places without lat/lng). */
 export function estimateDistanceKm(placeId: string): number {
-  const override = PLACE_DISTANCE_OVERRIDES[placeId];
+  const OVERRIDES: Record<string, number> = {
+    current: 0,
+    home: 1.2,
+    work: 0.8,
+    s1: 0.3,
+    s2: 0.7,
+    s3: 0.4,
+    s4: 0.5,
+    s5: 0.3,
+  };
+  const override = OVERRIDES[placeId];
   if (override !== undefined) return override;
   let hash = 0;
   for (let i = 0; i < placeId.length; i++) {
     hash = (hash * 31 + placeId.charCodeAt(i)) | 0;
   }
-  const positive = Math.abs(hash);
-  return 0.5 + (positive % 60) / 10;
+  return 0.5 + (Math.abs(hash) % 60) / 10;
 }
 
 export function computePriceCents(
