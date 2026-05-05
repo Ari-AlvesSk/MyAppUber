@@ -70,6 +70,8 @@ export default function BookingScreen() {
           ? Math.round((s.minPriceMoto ?? 5.0) * 100)
           : Math.round((s.minPriceCar ?? 8.0) * 100),
       })));
+      if (s.pixKey) setPlatformPixKey(s.pixKey);
+      if (s.pixKeyType) setPlatformPixKeyType(s.pixKeyType);
     }).catch(() => {});
   }, []);
 
@@ -91,9 +93,12 @@ export default function BookingScreen() {
   const [couponLoading, setCouponLoading] = useState(false);
   const [showCouponInput, setShowCouponInput] = useState(false);
 
-  // ── Stripe payment modal ──
+  // ── Platform Pix settings ──
+  const [platformPixKey, setPlatformPixKey] = useState<string>("");
+  const [platformPixKeyType, setPlatformPixKeyType] = useState<string>("");
+
+  // ── Pix payment modal ──
   const [showPixModal, setShowPixModal] = useState(false);
-  const [pixQrCode, setPixQrCode] = useState<string | null>(null);
   const [pixCopied, setPixCopied] = useState(false);
   const [pendingRideId, setPendingRideId] = useState<string | null>(null);
 
@@ -202,7 +207,7 @@ export default function BookingScreen() {
     setCouponCode("");
   };
 
-  const createRideRecord = async (): Promise<string> => {
+  const createRideRecord = async (overrideStatus?: Ride["status"]): Promise<string> => {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 6);
     const ride: Ride = {
       id,
@@ -213,7 +218,7 @@ export default function BookingScreen() {
       priceCents: finalPriceCents,
       distanceKm,
       durationMinutes: tripDurationMin,
-      status: "searching",
+      status: overrideStatus ?? "searching",
       driver: null,
       createdAt: Date.now(),
       completedAt: null,
@@ -231,24 +236,9 @@ export default function BookingScreen() {
 
     try {
       if (isPixPayment) {
-        // 1. Cria a corrida
-        const rideId = await createRideRecord();
+        // Cria a corrida com status awaiting_pix (aguarda confirmação do admin)
+        const rideId = await createRideRecord("awaiting_pix");
         setPendingRideId(rideId);
-
-        // 2. Cria PaymentIntent Pix via Stripe
-        try {
-          const result = await api.createPaymentIntent({
-            rideId,
-            amountCents: finalPriceCents,
-            paymentType: "pix",
-          });
-          // Pega o código copia-e-cola do Pix
-          const pixCode = result.pixData?.data ?? result.pixData?.image_url_png ?? null;
-          setPixQrCode(pixCode);
-        } catch {
-          setPixQrCode(null);
-        }
-
         setRequesting(false);
         setShowPixModal(true);
         return;
@@ -281,7 +271,7 @@ export default function BookingScreen() {
   };
 
   const copyPixCode = () => {
-    const code = pixQrCode ?? "";
+    const code = platformPixKey ?? "";
     if (Platform.OS === "web") {
       try { (navigator as any).clipboard?.writeText(code); } catch {}
     } else {
@@ -519,7 +509,7 @@ export default function BookingScreen() {
         </View>
       )}
 
-      {/* ── Pix payment modal (Stripe) ── */}
+      {/* ── Pix payment modal ── */}
       <Modal visible={showPixModal} transparent animationType="slide" onRequestClose={() => setShowPixModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.pixSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 20 }]}>
@@ -530,7 +520,7 @@ export default function BookingScreen() {
               </View>
               <Text style={[styles.pixTitle, { color: colors.foreground }]}>Pagamento via Pix</Text>
               <Text style={[styles.pixSubtitle, { color: colors.mutedForeground }]}>
-                Escaneie o QR ou copie o código e pague pelo seu banco. O motorista será chamado após a confirmação.
+                Copie a chave Pix abaixo, pague pelo seu banco e clique em confirmar. O motorista só é acionado após verificação.
               </Text>
             </View>
 
@@ -539,17 +529,17 @@ export default function BookingScreen() {
               <Text style={[styles.pixAmount, { color: colors.accent }]}>{formatPrice(finalPriceCents)}</Text>
             </View>
 
-            {pixQrCode ? (
+            {platformPixKey ? (
               <>
-                <Text style={[styles.pixKeyLabel, { color: colors.mutedForeground }]}>CÓDIGO PIX (COPIA E COLA)</Text>
+                <Text style={[styles.pixKeyLabel, { color: colors.mutedForeground }]}>
+                  CHAVE PIX — {platformPixKeyType.toUpperCase()}
+                </Text>
                 <View style={[styles.pixKeyBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                   <TextInput
-                    value={pixQrCode}
+                    value={platformPixKey}
                     editable={false}
                     selectTextOnFocus
-                    multiline
-                    numberOfLines={2}
-                    style={[styles.pixKeyValue, { color: colors.foreground, flex: 1, fontSize: 11 }]}
+                    style={[styles.pixKeyValue, { color: colors.foreground, flex: 1 }]}
                   />
                   <Pressable
                     onPress={copyPixCode}
@@ -563,10 +553,10 @@ export default function BookingScreen() {
                 </View>
               </>
             ) : (
-              <View style={[styles.pixInfoBox, { backgroundColor: colors.muted }]}>
-                <Feather name="zap" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.pixInfoTxt, { color: colors.mutedForeground }]}>
-                  Pagamento Pix gerado via Stripe. Abra seu banco e use a opção Pix para pagar.
+              <View style={[styles.pixInfoBox, { backgroundColor: "#FEF3C722", borderWidth: 1, borderColor: "#F59E0B44" }]}>
+                <Feather name="alert-triangle" size={13} color="#F59E0B" />
+                <Text style={[styles.pixInfoTxt, { color: "#F59E0B" }]}>
+                  Chave Pix não configurada. Contate o administrador do app.
                 </Text>
               </View>
             )}
@@ -574,16 +564,21 @@ export default function BookingScreen() {
             <View style={[styles.pixInfoBox, { backgroundColor: colors.muted }]}>
               <Feather name="shield" size={13} color={colors.mutedForeground} />
               <Text style={[styles.pixInfoTxt, { color: colors.mutedForeground }]}>
-                Processado com segurança via Stripe. Se o motorista cancelar, o reembolso é automático.
+                Após confirmar, o pagamento será verificado pelo administrador antes de acionar o motorista.
               </Text>
             </View>
 
             <Pressable
-              onPress={handlePixConfirm}
-              style={({ pressed }) => [styles.pixConfirmBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}
+              onPress={platformPixKey ? handlePixConfirm : undefined}
+              style={({ pressed }) => [styles.pixConfirmBtn, {
+                backgroundColor: platformPixKey ? colors.accent : colors.muted,
+                opacity: pressed ? 0.85 : 1,
+              }]}
             >
-              <Feather name="check-circle" size={18} color={colors.accentForeground} />
-              <Text style={[styles.pixConfirmTxt, { color: colors.accentForeground }]}>Já realizei o pagamento</Text>
+              <Feather name="check-circle" size={18} color={platformPixKey ? colors.accentForeground : colors.mutedForeground} />
+              <Text style={[styles.pixConfirmTxt, { color: platformPixKey ? colors.accentForeground : colors.mutedForeground }]}>
+                Já realizei o pagamento
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => setShowPixModal(false)}

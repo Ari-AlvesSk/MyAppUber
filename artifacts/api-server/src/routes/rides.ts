@@ -73,6 +73,8 @@ const rideSchema = z.object({
   distanceKm: z.number(),
   durationMinutes: z.number().int(),
   status: z.string().optional(),
+  paymentMethod: z.string().optional(),
+  pixPaymentStatus: z.string().optional(),
   driver: z.unknown().optional(),
 });
 
@@ -97,6 +99,8 @@ router.post("/", async (req, res) => {
         distanceKm: parsed.data.distanceKm,
         durationMinutes: parsed.data.durationMinutes,
         status: parsed.data.status ?? "searching",
+        paymentMethod: parsed.data.paymentMethod ?? null,
+        pixPaymentStatus: parsed.data.pixPaymentStatus ?? null,
         driver: (parsed.data.driver as Record<string, unknown>) ?? null,
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },
@@ -114,6 +118,7 @@ const patchSchema = z.object({
   driver: z.unknown().optional(),
   driverId: z.string().optional(),
   completedAt: z.number().optional(),
+  pixPaymentStatus: z.string().optional(),
 });
 
 router.patch("/:id", async (req, res) => {
@@ -127,6 +132,7 @@ router.patch("/:id", async (req, res) => {
     if (parsed.data.driverId !== undefined) set["driverId"] = parsed.data.driverId;
     if (parsed.data.completedAt !== undefined)
       set["completedAt"] = new Date(parsed.data.completedAt);
+    if (parsed.data.pixPaymentStatus !== undefined) set["pixPaymentStatus"] = parsed.data.pixPaymentStatus;
 
     const ride = await RideModel.findByIdAndUpdate(req.params.id, { $set: set }, { new: false }).lean();
 

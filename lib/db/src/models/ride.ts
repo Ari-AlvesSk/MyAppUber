@@ -33,6 +33,8 @@ const rideSchema = new Schema<IRide>(
     distanceKm: { type: Number, required: true },
     durationMinutes: { type: Number, required: true },
     status: { type: String, default: "searching" },
+    paymentMethod: { type: String, default: null },
+    pixPaymentStatus: { type: String, default: null },
     driver: { type: Schema.Types.Mixed, default: null },
     driverId: { type: String, index: true, default: null },
     completedAt: { type: Date, default: null },

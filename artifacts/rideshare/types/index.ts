@@ -1,6 +1,7 @@
 export type RideTier = "moto" | "car";
 
 export type RideStatus =
+  | "awaiting_pix"
   | "searching"
   | "matched"
   | "arriving"

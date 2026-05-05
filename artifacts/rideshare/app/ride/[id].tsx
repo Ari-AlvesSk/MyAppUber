@@ -149,6 +149,18 @@ export default function RideScreen() {
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 4 }}>
+          {ride.status === "awaiting_pix" && (
+            <View style={styles.searchBlock}>
+              <View style={[styles.pulseCore, { backgroundColor: "#F59E0B", width: 56, height: 56, borderRadius: 28 }]}>
+                <Feather name="zap" size={24} color="#fff" />
+              </View>
+              <Text style={[styles.title, { color: colors.foreground }]}>Aguardando confirmação do Pix</Text>
+              <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+                Seu pagamento Pix está sendo verificado pelo administrador. O motorista será acionado em breve.
+              </Text>
+            </View>
+          )}
+
           {ride.status === "searching" && (
             <View style={styles.searchBlock}>
               <View style={styles.pulseWrap}>

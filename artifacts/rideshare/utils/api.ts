@@ -118,6 +118,7 @@ export const api = {
   getPublicPaymentSettings: () =>
     request<{
       pixEnabled: boolean; cardEnabled: boolean; cashEnabled: boolean;
+      pixKey: string; pixKeyType: string;
       stripePublishableKey: string;
       pricePerKmCar: number; pricePerKmMoto: number;
       minPriceCar: number; minPriceMoto: number;

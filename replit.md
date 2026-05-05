@@ -105,9 +105,10 @@ Expo mobile app (pt-BR). Theme: black + lime `#00D26A`. Uses `useColors()` hook.
 - Cartão: número formatado (XXXX XXXX XXXX XXXX), titular, validade MM/AA, detecção de bandeira (Visa/Mastercard/Elo/Amex)
 
 **Booking Pix Flow** (`app/booking.tsx`):
-- Pagamento Pix: mostra modal com chave Pix da plataforma + botão copiar + "Já realizei o pagamento"
-- Motorista só é chamado após o passageiro confirmar o pagamento no modal
-- Pagamento cartão: corrida criada diretamente (cobrança via Stripe quando integrado)
+- Pagamento Pix: busca chave Pix da plataforma via `getPublicPaymentSettings`, mostra no modal com botão copiar
+- Corrida criada com status `"awaiting_pix"` (invisível para motoristas)
+- "Já realizei o pagamento" navega para ride/[id] com estado de espera; motorista só é acionado após admin confirmar
+- Pagamento cartão: corrida criada diretamente com status `"searching"` (cobrança via Stripe quando integrado)
 
 **Map** (`components/LeafletMap.web.tsx`):
 - `showAsVehicle + vehicleType` — renders car/moto SVG icon instead of dot for driver

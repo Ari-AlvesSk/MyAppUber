@@ -20,6 +20,7 @@ function StatusBadge({ status }: { status: Ride["status"] }) {
   const colors = useColors();
   const map: Record<Ride["status"], { label: string; bg: string; fg: string }> =
     {
+      awaiting_pix: { label: "Pix pendente", bg: "#FEF3C7", fg: "#92400E" },
       searching: { label: "Buscando", bg: colors.muted, fg: colors.foreground },
       matched: { label: "Encontrado", bg: colors.muted, fg: colors.foreground },
       arriving: {
