@@ -1,6 +1,6 @@
 // Native implementation: renders Leaflet inside a WebView.
 // The web version (LeafletMap.web.tsx) uses an <iframe> instead.
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
 
@@ -55,9 +55,18 @@ function buildHtml(
   originLat?: number,
   originLng?: number,
   showRoute?: boolean,
+  vehicleType?: string,
+  showAsVehicle?: boolean,
 ): string {
   const isPickup = mode === "pickup";
   const tapPinColor = isPickup ? "#00D26A" : "#0a0a0a";
+  const tapPinInner = isPickup ? "#0a0a0a" : "#00D26A";
+
+  const locIconHtml = showAsVehicle && vehicleType
+    ? vehicleIconHtml(vehicleType)
+    : `<div style="position:relative;width:26px;height:26px"><div style="position:absolute;top:0;left:0;width:26px;height:26px;background:rgba(0,210,106,0.2);border-radius:50%;animation:pulse 2s infinite ease-out"></div><div style="position:absolute;top:4px;left:4px;width:18px;height:18px;background:#00D26A;border:3px solid white;border-radius:50%;box-shadow:0 2px 10px rgba(0,210,106,0.6)"></div></div>`;
+  const locIconSize = showAsVehicle ? [38, 38] : [26, 26];
+  const locIconAnchor = showAsVehicle ? [19, 19] : [13, 13];
 
   const originInit =
     !isPickup && originLat != null && originLng != null
@@ -129,14 +138,25 @@ body,html,#map{width:100%;height:100%;overflow:hidden}
 <script>
 var map=L.map('map',{zoomControl:false,attributionControl:false}).setView([${lat},${lng}],16);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+var locIconHtml='${locIconHtml.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "")}';
 var locIcon=L.divIcon({
-  html:'<div style="position:relative;width:26px;height:26px"><div style="position:absolute;top:0;left:0;width:26px;height:26px;background:rgba(0,210,106,0.2);border-radius:50%;animation:pulse 2s infinite ease-out"></div><div style="position:absolute;top:4px;left:4px;width:18px;height:18px;background:#00D26A;border:3px solid white;border-radius:50%;box-shadow:0 2px 10px rgba(0,210,106,0.6)"></div></div>',
-  className:'',iconSize:[26,26],iconAnchor:[13,13]
+  html:locIconHtml,
+  className:'',iconSize:[${locIconSize.join(",")}],iconAnchor:[${locIconAnchor.join(",")}]
 });
-L.marker([${lat},${lng}],{icon:locIcon,zIndexOffset:999}).addTo(map);
+var locMarker=L.marker([${lat},${lng}],{icon:locIcon,zIndexOffset:999}).addTo(map);
 var tapMarker=null;
 var driverCarMarker=null;
 var routePolyline=null;
+
+function _drawRoute(aLat,aLng,bLat,bLng){
+  if(routePolyline){map.removeLayer(routePolyline);routePolyline=null;}
+  if(aLat!=null&&bLat!=null){
+    routePolyline=L.polyline([[aLat,aLng],[bLat,bLng]],{color:'#00D26A',weight:5,opacity:0.85,dashArray:'10,7'}).addTo(map);
+    try{map.fitBounds([[aLat,aLng],[bLat,bLng]],{padding:[70,70],maxZoom:17});}catch(e){}
+  }
+}
+
 ${originInit}
 ${destInit}
 ${routeInit}
@@ -157,8 +177,8 @@ export function LeafletMap({
   mode = "destination",
   zoom: _zoom,
   showRoute = false,
-  vehicleType: _vehicleType,
-  showAsVehicle: _showAsVehicle,
+  vehicleType,
+  showAsVehicle = false,
   driverMarkers: _driverMarkers,
   adminMode: _adminMode,
   driverCarLat,
@@ -172,6 +192,24 @@ export function LeafletMap({
   const webViewRef = useRef<any>(null);
   const [webReady, setWebReady] = useState(false);
 
+  // Capture initial values — HTML is built only once to prevent WebView reloads
+  const initRef = useRef({ lat, lng, destLat, destLng, originLat, originLng, showRoute, vehicleType, showAsVehicle });
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const html = useMemo(() => buildHtml(
+    initRef.current.lat,
+    initRef.current.lng,
+    interactive,
+    mode,
+    initRef.current.destLat,
+    initRef.current.destLng,
+    initRef.current.originLat,
+    initRef.current.originLng,
+    initRef.current.showRoute,
+    initRef.current.vehicleType,
+    initRef.current.showAsVehicle,
+  ), [interactive, mode]);
+
   const handleLoadEnd = useCallback(() => {
     setWebReady(true);
   }, []);
@@ -182,25 +220,57 @@ export function LeafletMap({
     }
   }, []);
 
+  // Update center location marker (driver position updates etc)
+  const prevLatRef = useRef({ lat, lng });
+  useEffect(() => {
+    if (!webReady) return;
+    if (prevLatRef.current.lat === lat && prevLatRef.current.lng === lng) return;
+    prevLatRef.current = { lat, lng };
+    injectJS(`locMarker.setLatLng([${lat},${lng}]);`);
+  }, [webReady, lat, lng, injectJS]);
+
+  // Update destination pin (e.g. status changes to in_progress → show dropoff)
+  const prevDestRef = useRef({ destLat, destLng });
+  useEffect(() => {
+    if (!webReady) return;
+    if (prevDestRef.current.destLat === destLat && prevDestRef.current.destLng === destLng) return;
+    prevDestRef.current = { destLat, destLng };
+    if (destLat == null || destLng == null) return;
+    const isPickup = mode === "pickup";
+    const pinColor = isPickup ? "#00D26A" : "#0a0a0a";
+    injectJS(`
+      if(tapMarker){map.removeLayer(tapMarker);}
+      var newTapIcon=L.divIcon({html:'<div style="width:32px;height:32px;background:${pinColor};border:3px solid white;border-radius:50%;box-shadow:0 3px 14px rgba(0,0,0,0.5)"></div>',className:'',iconSize:[32,32],iconAnchor:[16,16]});
+      tapMarker=L.marker([${destLat},${destLng}],{icon:newTapIcon,zIndexOffset:1000}).addTo(map);
+    `);
+  }, [webReady, destLat, destLng, mode, injectJS]);
+
+  // Update driver car marker
+  const prevCarRef = useRef({ lat: driverCarLat, lng: driverCarLng });
   useEffect(() => {
     if (!webReady) return;
     if (driverCarLat == null || driverCarLng == null) return;
+    if (prevCarRef.current.lat === driverCarLat && prevCarRef.current.lng === driverCarLng) return;
+    prevCarRef.current = { lat: driverCarLat, lng: driverCarLng };
     const iconHtml = vehicleIconHtml(driverCarVehicleType ?? "car").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     injectJS(`
-      if(driverCarMarker){map.removeLayer(driverCarMarker);}
-      var ico=L.divIcon({html:"${iconHtml}",className:"",iconSize:[38,38],iconAnchor:[19,19]});
-      driverCarMarker=L.marker([${driverCarLat},${driverCarLng}],{icon:ico,zIndexOffset:1001}).addTo(map);
+      if(driverCarMarker){driverCarMarker.setLatLng([${driverCarLat},${driverCarLng}]);}
+      else{
+        var ico=L.divIcon({html:"${iconHtml}",className:"",iconSize:[38,38],iconAnchor:[19,19]});
+        driverCarMarker=L.marker([${driverCarLat},${driverCarLng}],{icon:ico,zIndexOffset:1001}).addTo(map);
+      }
     `);
   }, [webReady, driverCarLat, driverCarLng, driverCarVehicleType, injectJS]);
 
+  // Draw/update live route
+  const prevRouteRef = useRef({ aLat: routeALat, aLng: routeALng, bLat: routeBLat, bLng: routeBLng });
   useEffect(() => {
     if (!webReady) return;
     if (routeALat == null || routeALng == null || routeBLat == null || routeBLng == null) return;
-    injectJS(`
-      if(routePolyline){map.removeLayer(routePolyline);}
-      routePolyline=L.polyline([[${routeALat},${routeALng}],[${routeBLat},${routeBLng}]],{color:"#00D26A",weight:4,opacity:0.85,dashArray:"8,6"}).addTo(map);
-      map.fitBounds([[${routeALat},${routeALng}],[${routeBLat},${routeBLng}]],{padding:[60,60]});
-    `);
+    const prev = prevRouteRef.current;
+    if (prev.aLat === routeALat && prev.aLng === routeALng && prev.bLat === routeBLat && prev.bLng === routeBLng) return;
+    prevRouteRef.current = { aLat: routeALat, aLng: routeALng, bLat: routeBLat, bLng: routeBLng };
+    injectJS(`_drawRoute(${routeALat},${routeALng},${routeBLat},${routeBLng});`);
   }, [webReady, routeALat, routeALng, routeBLat, routeBLng, injectJS]);
 
   const handleMessage = useCallback(
@@ -214,11 +284,6 @@ export function LeafletMap({
       } catch {}
     },
     [onTap],
-  );
-
-  const html = buildHtml(
-    lat, lng, interactive, mode,
-    destLat, destLng, originLat, originLng, showRoute,
   );
 
   const resolvedHeight = height ?? 300;

@@ -51,7 +51,6 @@ export default function RideScreen() {
   const [driverLat, setDriverLat] = useState<number | null>(null);
   const [driverLng, setDriverLng] = useState<number | null>(null);
   const [driverVehicleType, setDriverVehicleType] = useState<"moto" | "car">("car");
-  const mapIframeRef = useRef<HTMLIFrameElement | null>(null);
 
   // Determine the current route target (where the car is heading)
   const routeTarget = (() => {
@@ -119,31 +118,9 @@ export default function RideScreen() {
     const pollLocation = async () => {
       try {
         const loc = await api.getDriverLocation(driverId);
-        const newLat = loc.lat;
-        const newLng = loc.lng;
-        setDriverLat(newLat);
-        setDriverLng(newLng);
+        setDriverLat(loc.lat);
+        setDriverLng(loc.lng);
         setDriverVehicleType(vType);
-
-        // Update driver car position on map
-        if (mapIframeRef.current) {
-          try {
-            mapIframeRef.current.contentWindow?.postMessage(
-              JSON.stringify({ type: "updateDriverCar", lat: newLat, lng: newLng, vehicleType: vType }),
-              "*",
-            );
-            // Also update the route: driver → target
-            const target = ride.status === "in_progress"
-              ? { lat: ride.dropoff.lat, lng: ride.dropoff.lng }
-              : { lat: ride.pickup.lat, lng: ride.pickup.lng };
-            if (target.lat != null && target.lng != null) {
-              mapIframeRef.current.contentWindow?.postMessage(
-                JSON.stringify({ type: "updateRoute", aLat: newLat, aLng: newLng, bLat: target.lat, bLng: target.lng }),
-                "*",
-              );
-            }
-          } catch {}
-        }
       } catch {}
     };
 
@@ -152,22 +129,6 @@ export default function RideScreen() {
     return () => clearInterval(interval);
   }, [ride?.driver?.id, ride?.status]);
 
-  // When status changes to in_progress, update route target to dropoff
-  useEffect(() => {
-    if (ride?.status !== "in_progress") return;
-    if (!mapIframeRef.current) return;
-    if (driverLat == null || ride.dropoff.lat == null) return;
-    try {
-      mapIframeRef.current.contentWindow?.postMessage(
-        JSON.stringify({ type: "setTap", lat: ride.dropoff.lat, lng: ride.dropoff.lng, color: "#0a0a0a", innerColor: "#00D26A" }),
-        "*",
-      );
-      mapIframeRef.current.contentWindow?.postMessage(
-        JSON.stringify({ type: "updateRoute", aLat: driverLat, aLng: driverLng, bLat: ride.dropoff.lat, bLng: ride.dropoff.lng }),
-        "*",
-      );
-    } catch {}
-  }, [ride?.status]);
 
   // Poll Mercado Pago to auto-confirm Pix payment
   useEffect(() => {
@@ -208,13 +169,6 @@ export default function RideScreen() {
     return () => loop.stop();
   }, [ride?.status, pulse]);
 
-  // Capture iframe ref for postMessages (web only)
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    const iframes = (document as Document).querySelectorAll("iframe[title='Mapa']");
-    const last = iframes[iframes.length - 1] as HTMLIFrameElement | null;
-    mapIframeRef.current = last;
-  });
 
   if (!ride) {
     return (
@@ -267,22 +221,19 @@ export default function RideScreen() {
           height={420}
           lat={mapCenterLat}
           lng={mapCenterLng}
-          // Destination pin
+          interactive={false}
+          // Destination pin: pickup during search/arriving, dropoff once in_progress
           destLat={ride.status === "in_progress" ? (ride.dropoff.lat ?? undefined) : (ride.pickup.lat ?? undefined)}
           destLng={ride.status === "in_progress" ? (ride.dropoff.lng ?? undefined) : (ride.pickup.lng ?? undefined)}
-          // Driver car (moving)
+          // Driver car marker (moves in real-time; null = hidden)
           driverCarLat={driverLat}
           driverCarLng={driverLng}
           driverCarVehicleType={driverVehicleType}
-          // Live route: driver → target
-          routeALat={showLiveTracking ? driverLat : undefined}
-          routeALng={showLiveTracking ? driverLng : undefined}
-          routeBLat={showLiveTracking ? (routeTarget?.lat ?? undefined) : undefined}
-          routeBLng={showLiveTracking ? (routeTarget?.lng ?? undefined) : undefined}
-          showRoute={!showLiveTracking && ride.status !== "completed"}
-          originLat={!showLiveTracking ? ride.pickup.lat : undefined}
-          originLng={!showLiveTracking ? ride.pickup.lng : undefined}
-          interactive={false}
+          // Live dashed route: driver position → current target
+          routeALat={driverLat}
+          routeALng={driverLng}
+          routeBLat={routeTarget?.lat ?? undefined}
+          routeBLng={routeTarget?.lng ?? undefined}
         />
         <Pressable
           onPress={() => router.replace("/(tabs)")}
