@@ -106,6 +106,7 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      <Tabs.Screen name="pending" options={{ href: null }} />
     </Tabs>
   );
 }

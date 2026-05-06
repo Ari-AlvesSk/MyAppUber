@@ -78,12 +78,21 @@ A ride-hailing (rideshare) app for Brazil: Expo mobile + web frontend for passen
 - **Notificação push**: ao enviar mensagem, o outro lado recebe push via `sendPushToUser`
 - **Compartilhar**: botão "Compartilhar no WhatsApp" visível nas fases matched/arriving/in_progress; usa `Share.share()` (native) ou `wa.me/?text=` (web)
 
+## Reports / Denúncias
+
+- **Model**: `lib/db/src/models/report.ts` — coleção `denuncias` no MongoDB; campos: rideId, userId, driverId, driverName, reason, details, status (pending/reviewed/resolved)
+- **API**: `POST /api/reports` (cria), `GET /api/reports` (admin lista), `PATCH /api/reports/:id` (atualiza status)
+- **Passageiro**: botão "Denunciar viagem" aparece após corrida concluída ou cancelada (se havia motorista); modal com 6 motivos + campo de detalhes opcional; exibe banner de confirmação após envio
+- **Admin**: aba "Denúncias" no painel admin com badge de pendentes; ações Analisar / Resolver por card
+
 ## Gotchas
 
 - The app shows a location permission gate before login on web (expected behavior — dismiss or navigate to /login directly)
 - Mongoose logs duplicate index warnings for User model on startup — harmless
 - Push notifications only work on real native devices (iOS/Android) — Expo Go or a dev build; web uses in-app toasts instead
 - The `artifacts/api-server: API Server` workflow is a duplicate created by deployment and will always fail with EADDRINUSE — use the canonical "API Server" workflow only
+- Driver tab layout has `<Tabs.Screen name="pending" options={{ href: null }} />` to hide the pending screen from the tab bar — do not remove it or pending will reappear as a ghost tab
+- Vehicle type filtering: `tier` in the Ride model maps directly to `"car"` or `"moto"` — drivers only see rides matching their `user.vehicleType` via `GET /api/rides/pending?tier=`
 
 ## Pointers
 

@@ -186,4 +186,13 @@ export const api = {
 
   sendChatMessage: (rideId: string, data: { senderId: string; senderRole: "passenger" | "driver"; text: string }) =>
     request<ChatMessage>(`/chat/${encodeURIComponent(rideId)}`, { method: "POST", body: JSON.stringify(data) }),
+
+  createReport: (data: { rideId: string; userId: string; driverId?: string | null; driverName?: string | null; reason: string; details?: string | null }) =>
+    request<{ ok: boolean }>("/reports", { method: "POST", body: JSON.stringify(data) }),
+
+  getReports: () =>
+    request<Record<string, unknown>[]>("/reports"),
+
+  updateReport: (id: string, status: "pending" | "reviewed" | "resolved") =>
+    request<{ ok: boolean }>(`/reports/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ status }) }),
 };

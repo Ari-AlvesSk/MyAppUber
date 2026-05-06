@@ -35,6 +35,15 @@ const CANCEL_REASONS_PASSENGER = [
   "Outro motivo",
 ];
 
+const REPORT_REASONS = [
+  "Motorista sem máscara / higiene",
+  "Motorista desorientado ou sob efeito de álcool",
+  "Comportamento inadequado ou assédio",
+  "Veículo diferente do cadastrado",
+  "Rota muito diferente da combinada",
+  "Outro problema grave",
+];
+
 export default function RideScreen() {
   const colors = useColors();
   const router = useRouter();
@@ -49,6 +58,12 @@ export default function RideScreen() {
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [mpPaymentId, setMpPaymentId] = useState<string | null>(null);
+
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportReason, setReportReason] = useState<string | null>(null);
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportSending, setReportSending] = useState(false);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
 
   // Chat state
   const [chatVisible, setChatVisible] = useState(false);
@@ -288,6 +303,27 @@ export default function RideScreen() {
   const handleCancel = () => {
     setSelectedReason(null);
     setCancelModalVisible(true);
+  };
+
+  const handleSubmitReport = async () => {
+    if (!reportReason || !ride || !userId || reportSending) return;
+    setReportSending(true);
+    try {
+      await api.createReport({
+        rideId: ride.id,
+        userId,
+        driverId: ride.driver?.id ?? null,
+        driverName: ride.driver?.name ?? null,
+        reason: reportReason,
+        details: reportDetails.trim() || null,
+      });
+      setReportSubmitted(true);
+      setReportModalVisible(false);
+      setReportReason(null);
+      setReportDetails("");
+    } catch {} finally {
+      setReportSending(false);
+    }
   };
 
   const handleConfirmCancel = async () => {
@@ -533,7 +569,7 @@ export default function RideScreen() {
         </ScrollView>
 
         <View style={styles.actions}>
-          {(ride.status === "searching" || ride.status === "matched" || ride.status === "arriving") && (
+          {(ride.status === "searching" || ride.status === "matched" || ride.status === "arriving" || ride.status === "in_progress") && (
             <PrimaryButton
               label="Cancelar corrida"
               variant="secondary"
@@ -545,6 +581,19 @@ export default function RideScreen() {
           )}
           {(ride.status === "completed" || ride.status === "cancelled") && (
             <PrimaryButton label="Concluir" variant="primary" onPress={() => router.replace("/(tabs)")} />
+          )}
+          {(ride.status === "completed" || ride.status === "cancelled") && ride.driver && !reportSubmitted && (
+            <PrimaryButton
+              label="Denunciar viagem"
+              variant="secondary"
+              onPress={() => { setReportReason(null); setReportDetails(""); setReportModalVisible(true); }}
+            />
+          )}
+          {reportSubmitted && (
+            <View style={[styles.reportedBanner, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+              <Feather name="check-circle" size={14} color={colors.accent} />
+              <Text style={[styles.reportedTxt, { color: colors.mutedForeground }]}>Denúncia enviada. Obrigado pelo relato.</Text>
+            </View>
           )}
         </View>
       </View>
@@ -633,6 +682,69 @@ export default function RideScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Report modal */}
+      <Modal
+        visible={reportModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setReportModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Denunciar viagem</Text>
+            <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>Selecione o motivo da denúncia</Text>
+
+            <View style={styles.reasonList}>
+              {REPORT_REASONS.map((reason) => (
+                <Pressable
+                  key={reason}
+                  onPress={() => setReportReason(reason)}
+                  style={({ pressed }) => [
+                    styles.reasonRow,
+                    {
+                      backgroundColor: reportReason === reason ? "#EF444422" : colors.card,
+                      borderColor: reportReason === reason ? "#EF4444" : colors.border,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <View style={[styles.reasonRadio, { borderColor: reportReason === reason ? "#EF4444" : colors.border }]}>
+                    {reportReason === reason && (
+                      <View style={[styles.reasonRadioInner, { backgroundColor: "#EF4444" }]} />
+                    )}
+                  </View>
+                  <Text style={[styles.reasonTxt, { color: colors.foreground }]}>{reason}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <TextInput
+              style={[styles.reportDetailInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+              placeholder="Descreva em mais detalhes (opcional)..."
+              placeholderTextColor={colors.mutedForeground}
+              value={reportDetails}
+              onChangeText={setReportDetails}
+              multiline
+              maxLength={500}
+            />
+
+            <View style={styles.modalActions}>
+              <PrimaryButton
+                label={reportSending ? "Enviando…" : "Enviar denúncia"}
+                variant="destructive"
+                onPress={handleSubmitReport}
+              />
+              <PrimaryButton
+                label="Cancelar"
+                variant="secondary"
+                onPress={() => setReportModalVisible(false)}
+              />
+            </View>
+          </View>
+        </View>
       </Modal>
 
       <Modal
@@ -761,6 +873,9 @@ const styles = StyleSheet.create({
   reasonRadioInner: { width: 10, height: 10, borderRadius: 5 },
   reasonTxt: { fontSize: 14, fontFamily: "Inter_500Medium", flex: 1 },
   modalActions: { gap: 10 },
+  reportDetailInput: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, fontFamily: "Inter_400Regular", minHeight: 72, marginBottom: 16, textAlignVertical: "top" },
+  reportedBanner: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 12, borderWidth: 1 },
+  reportedTxt: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 },
   chatUnreadBadge: { position: "absolute", top: 2, right: 2, width: 14, height: 14, borderRadius: 7, alignItems: "center", justifyContent: "center", zIndex: 1 },
   chatUnreadTxt: { fontSize: 9, fontFamily: "Inter_700Bold" },
   chatOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },

@@ -23,3 +23,4 @@ export * from "./models/withdrawal";
 export * from "./models/coupon";
 export * from "./models/paymentSettings";
 export * from "./models/chat";
+export * from "./models/report";

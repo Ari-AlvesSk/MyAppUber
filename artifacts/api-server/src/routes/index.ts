@@ -11,6 +11,7 @@ import stripeRouter from "./stripe";
 import mpRouter from "./mercadopago";
 import notificationsRouter from "./notifications";
 import chatRouter from "./chat";
+import reportsRouter from "./reports";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use("/stripe", stripeRouter);
 router.use("/mp", mpRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/chat", chatRouter);
+router.use("/reports", reportsRouter);
 
 export default router;

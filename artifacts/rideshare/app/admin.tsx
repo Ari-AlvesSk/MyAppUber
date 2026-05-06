@@ -26,7 +26,7 @@ import { useColors } from "@/hooks/useColors";
 import type { Ride } from "@/types";
 
 const COMMISSION = 0.2;
-type MainTab = "motoristas" | "viagens" | "financeiro" | "cupons" | "mapa" | "configuracoes";
+type MainTab = "motoristas" | "viagens" | "financeiro" | "cupons" | "mapa" | "configuracoes" | "denuncias";
 type DriverFilter = "pending" | "approved" | "rejected";
 
 type WithdrawalItem = {
@@ -176,6 +176,9 @@ export default function AdminScreen() {
   const [onlineDrivers, setOnlineDrivers] = useState<OnlineDriver[]>([]);
   const mapPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const [reports, setReports] = useState<Record<string, unknown>[]>([]);
+  const [reportStatusLoading, setReportStatusLoading] = useState<Record<string, boolean>>({});
+
   // ── Coupons ──
   const [coupons, setCoupons] = useState<CouponItem[]>([]);
   const [couponLoading, setCouponLoading] = useState(false);
@@ -211,6 +214,7 @@ export default function AdminScreen() {
   useEffect(() => { fetchWithdrawals(); }, []);
   useEffect(() => { if (mainTab === "cupons") fetchCoupons(); }, [mainTab]);
   useEffect(() => { if (mainTab === "configuracoes" && !settingsLoaded) fetchPaySettings(); }, [mainTab, settingsLoaded]);
+  useEffect(() => { if (mainTab === "denuncias") fetchReports(); }, [mainTab]);
   useEffect(() => {
     if (mainTab === "mapa") {
       fetchOnlineDrivers();
@@ -236,6 +240,14 @@ export default function AdminScreen() {
   };
   const fetchOnlineDrivers = async () => {
     try { const rows = await api.getOnlineDrivers(); setOnlineDrivers(rows); } catch {}
+  };
+  const fetchReports = async () => {
+    try { setReports(await api.getReports()); } catch {}
+  };
+  const handleUpdateReport = async (id: string, status: "reviewed" | "resolved") => {
+    setReportStatusLoading((p) => ({ ...p, [id]: true }));
+    try { await api.updateReport(id, status); await fetchReports(); } catch {}
+    setReportStatusLoading((p) => ({ ...p, [id]: false }));
   };
   const fetchCoupons = async () => {
     setCouponLoading(true);
@@ -378,12 +390,15 @@ export default function AdminScreen() {
   const pendingWithdrawals = withdrawals.filter((w) => w.status === "pending");
   const totalPendingWithdraw = pendingWithdrawals.reduce((s, w) => s + w.amountCents, 0);
 
+  const pendingReports = reports.filter((r) => r["status"] === "pending").length;
+
   const TABS = [
     { key: "motoristas", label: "Motoristas", icon: "users", badge: driverCounts.pending },
     { key: "viagens", label: "Viagens", icon: "navigation", badge: 0 },
     { key: "financeiro", label: "Financeiro", icon: "trending-up", badge: pendingWithdrawals.length + pixPendingRides.length },
     { key: "cupons", label: "Cupons", icon: "tag", badge: 0 },
     { key: "mapa", label: "Mapa", icon: "map-pin", badge: onlineDrivers.length },
+    { key: "denuncias", label: "Denúncias", icon: "alert-triangle", badge: pendingReports },
     { key: "configuracoes", label: "Config.", icon: "settings", badge: 0 },
   ];
 
@@ -1119,6 +1134,92 @@ export default function AdminScreen() {
               </>
             )}
           </Pressable>
+        </ScrollView>
+      )}
+
+      {/* ══════════════ DENÚNCIAS ══════════════ */}
+      {mainTab === "denuncias" && (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={s.list}>
+          <Pressable onPress={fetchReports} style={[s.refreshBtn, { backgroundColor: colors.muted, alignSelf: "flex-end", marginBottom: 4 }]}>
+            <Feather name="refresh-cw" size={13} color={colors.foreground} />
+          </Pressable>
+
+          {reports.length === 0 ? (
+            <EmptyState icon="alert-triangle" title="Nenhuma denúncia" text="Nenhuma denúncia recebida ainda." />
+          ) : reports.map((rep) => {
+            const id = String(rep["_id"] ?? "");
+            const status = String(rep["status"] ?? "pending");
+            const statusColors: Record<string, { bg: string; fg: string; label: string }> = {
+              pending: { bg: "#F59E0B22", fg: "#F59E0B", label: "Pendente" },
+              reviewed: { bg: "#3B82F622", fg: "#3B82F6", label: "Em análise" },
+              resolved: { bg: colors.accent + "22", fg: colors.accent, label: "Resolvida" },
+            };
+            const sc2 = statusColors[status] ?? statusColors["pending"]!;
+            return (
+              <View key={id} style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={s.cardTop}>
+                  <View style={[s.avatar, { backgroundColor: "#EF444422" }]}>
+                    <Feather name="alert-triangle" size={18} color="#EF4444" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.cardName, { color: colors.foreground }]} numberOfLines={1}>
+                      {String(rep["reason"] ?? "")}
+                    </Text>
+                    <Text style={[s.cardSub, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      Corrida: {String(rep["rideId"] ?? "").slice(0, 8)}…
+                    </Text>
+                  </View>
+                  <View style={[chip.wrap, { backgroundColor: sc2.bg }]}>
+                    <Text style={[chip.txt, { color: sc2.fg }]}>{sc2.label}</Text>
+                  </View>
+                </View>
+
+                {rep["driverName"] ? (
+                  <View style={[s.detailRow, { paddingHorizontal: 14, paddingBottom: 6 }]}>
+                    <Feather name="user" size={12} color={colors.mutedForeground} />
+                    <Text style={[s.detailTxt, { color: colors.mutedForeground }]}>Motorista: {String(rep["driverName"])}</Text>
+                  </View>
+                ) : null}
+
+                {rep["details"] ? (
+                  <View style={[s.details, { borderTopColor: colors.border }]}>
+                    <Text style={[s.detailTxt, { color: colors.foreground }]}>{String(rep["details"])}</Text>
+                  </View>
+                ) : null}
+
+                {status !== "resolved" && (
+                  <View style={ar.row}>
+                    {status === "pending" && (
+                      <Pressable
+                        onPress={() => handleUpdateReport(id, "reviewed")}
+                        disabled={!!reportStatusLoading[id]}
+                        style={[ar.btn, { backgroundColor: "#3B82F620", flex: 1 }]}
+                      >
+                        {reportStatusLoading[id] ? <ActivityIndicator size="small" color="#3B82F6" /> : (
+                          <>
+                            <Feather name="eye" size={14} color="#3B82F6" />
+                            <Text style={[ar.txt, { color: "#3B82F6" }]}>Analisar</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    )}
+                    <Pressable
+                      onPress={() => handleUpdateReport(id, "resolved")}
+                      disabled={!!reportStatusLoading[id]}
+                      style={[ar.btn, { backgroundColor: colors.accent, flex: 1 }]}
+                    >
+                      {reportStatusLoading[id] ? <ActivityIndicator size="small" color={colors.accentForeground} /> : (
+                        <>
+                          <Feather name="check" size={14} color={colors.accentForeground} />
+                          <Text style={[ar.txt, { color: colors.accentForeground }]}>Resolver</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </ScrollView>
       )}
 
