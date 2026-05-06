@@ -102,7 +102,7 @@ export const api = {
   processWithdrawal: (id: string, data: { status: "approved" | "rejected"; rejectionReason?: string }) =>
     request<{ ok: boolean }>(`/withdrawals/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 
-  postDriverLocation: (data: { driverId: string; driverName: string; vehicleType: string; lat: number; lng: number; online: boolean }) =>
+  postDriverLocation: (data: { driverId: string; driverName: string; vehicleType: string; lat: number; lng: number; online: boolean; rideId?: string }) =>
     request<{ ok: boolean }>("/drivers/location", { method: "POST", body: JSON.stringify(data) }),
   getOnlineDrivers: () =>
     request<DriverLocation[]>("/drivers/online"),

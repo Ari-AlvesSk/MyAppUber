@@ -126,6 +126,8 @@ const patchSchema = z.object({
   status: z.string().optional(),
   driver: z.unknown().optional(),
   driverId: z.string().optional(),
+  driverLat: z.number().optional().nullable(),
+  driverLng: z.number().optional().nullable(),
   completedAt: z.number().optional(),
   pixPaymentStatus: z.string().optional(),
   mpPaymentId: z.string().optional(),
@@ -141,6 +143,8 @@ router.patch("/:id", async (req, res) => {
     if (parsed.data.status !== undefined) set["status"] = parsed.data.status;
     if (parsed.data.driver !== undefined) set["driver"] = parsed.data.driver;
     if (parsed.data.driverId !== undefined) set["driverId"] = parsed.data.driverId;
+    if (parsed.data.driverLat !== undefined) set["driverLat"] = parsed.data.driverLat;
+    if (parsed.data.driverLng !== undefined) set["driverLng"] = parsed.data.driverLng;
     if (parsed.data.completedAt !== undefined)
       set["completedAt"] = new Date(parsed.data.completedAt);
     if (parsed.data.pixPaymentStatus !== undefined) set["pixPaymentStatus"] = parsed.data.pixPaymentStatus;

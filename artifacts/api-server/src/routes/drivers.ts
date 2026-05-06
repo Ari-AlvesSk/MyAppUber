@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { RideModel } from "@workspace/db";
 
 const router = Router();
 
@@ -16,6 +17,9 @@ interface DriverLocation {
 const locationStore = new Map<string, DriverLocation>();
 const STALE_MS = 60_000;
 
+// Active ride map: driverId → rideId (used to persist driver position into the ride doc)
+const driverActiveRide = new Map<string, string>();
+
 router.post("/location", async (req, res) => {
   const schema = z.object({
     driverId: z.string().min(1),
@@ -24,15 +28,29 @@ router.post("/location", async (req, res) => {
     lat: z.number(),
     lng: z.number(),
     online: z.boolean(),
+    rideId: z.string().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error });
-  const { driverId, driverName, vehicleType, lat, lng, online } = parsed.data;
+  const { driverId, driverName, vehicleType, lat, lng, online, rideId } = parsed.data;
+
+  // Guard against invalid (0,0) coordinates
+  const isValidCoord = !(Math.abs(lat) < 0.001 && Math.abs(lng) < 0.001);
+
   if (!online) {
     locationStore.delete(driverId);
-  } else {
+    driverActiveRide.delete(driverId);
+  } else if (isValidCoord) {
     locationStore.set(driverId, { driverId, driverName, vehicleType, lat, lng, online, updatedAt: Date.now() });
+
+    // Persist driver position into the active ride document
+    const activeRideId = rideId ?? driverActiveRide.get(driverId);
+    if (activeRideId) {
+      driverActiveRide.set(driverId, activeRideId);
+      RideModel.findByIdAndUpdate(activeRideId, { $set: { driverLat: lat, driverLng: lng } }).catch(() => {});
+    }
   }
+
   return res.json({ ok: true });
 });
 

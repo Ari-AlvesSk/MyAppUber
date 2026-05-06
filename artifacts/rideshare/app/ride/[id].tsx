@@ -79,6 +79,18 @@ export default function RideScreen() {
         const serverMpId = serverRide["mpPaymentId"] as string | null | undefined;
         if (serverMpId && !mpPaymentId) setMpPaymentId(serverMpId);
 
+        // Use driver position stored in ride document as fallback (or initial value)
+        // when live location polling hasn't succeeded yet.
+        // Valid coords: not (0,0), not null.
+        const rdLat = typeof serverRide["driverLat"] === "number" ? serverRide["driverLat"] : null;
+        const rdLng = typeof serverRide["driverLng"] === "number" ? serverRide["driverLng"] : null;
+        const rdValid = rdLat != null && rdLng != null &&
+          !(Math.abs(rdLat) < 0.001 && Math.abs(rdLng) < 0.001);
+        if (rdValid) {
+          setDriverLat((prev) => prev ?? rdLat);
+          setDriverLng((prev) => prev ?? rdLng);
+        }
+
         if (serverStatus && serverStatus !== ride.status) {
           const patch: Partial<Ride> = { status: serverStatus as Ride["status"] };
           if (serverDriver) patch.driver = serverDriver;

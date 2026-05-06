@@ -19,6 +19,8 @@ export interface IRide {
   status: string;
   driver?: Record<string, unknown> | null;
   driverId?: string | null;
+  driverLat?: number | null;
+  driverLng?: number | null;
   cancelReason?: string | null;
   createdAt?: Date;
   completedAt?: Date | null;
@@ -47,6 +49,8 @@ const rideSchema = new Schema<IRide>(
     mpPaymentId: { type: String, default: null },
     driver: { type: Schema.Types.Mixed, default: null },
     driverId: { type: String, index: true, default: null },
+    driverLat: { type: Number, default: null },
+    driverLng: { type: Number, default: null },
     cancelReason: { type: String, default: null },
     completedAt: { type: Date, default: null },
   },

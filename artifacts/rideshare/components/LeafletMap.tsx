@@ -131,6 +131,8 @@ function _makeCarIcon(type,color){
 }
 
 function _setDriverCar(lat,lng,type){
+  if(lat===0&&lng===0) return;
+  if(Math.abs(lat)<0.001&&Math.abs(lng)<0.001) return;
   if(driverCarMarker){driverCarMarker.setLatLng([lat,lng]);}
   else{driverCarMarker=L.marker([lat,lng],{icon:_makeCarIcon(type,'#00D26A'),zIndexOffset:1001}).addTo(map);}
 }
@@ -160,8 +162,10 @@ function _setDestPin(lat,lng){
   }).addTo(map);
 }
 
+var IS_VEHICLE=${showAsVehicle ? 'true' : 'false'};
 function _moveLoc(lat,lng){
   locMarker.setLatLng([lat,lng]);
+  if(IS_VEHICLE) map.panTo([lat,lng],{animate:true,duration:1.5});
 }
 
 ${originInit}

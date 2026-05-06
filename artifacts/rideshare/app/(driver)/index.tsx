@@ -125,6 +125,8 @@ export default function DriverHomeScreen() {
 
   const postLocation = useCallback(() => {
     if (!user?.id || !coords) return;
+    // Guard against invalid (0,0) coordinates — GPS not ready yet
+    if (Math.abs(coords.latitude) < 0.001 && Math.abs(coords.longitude) < 0.001) return;
     api.postDriverLocation({
       driverId: user.id,
       driverName: user.name,
@@ -132,8 +134,9 @@ export default function DriverHomeScreen() {
       lat: coords.latitude,
       lng: coords.longitude,
       online: true,
+      rideId: activeRide?.id,
     }).catch(() => {});
-  }, [user, coords]);
+  }, [user, coords, activeRide?.id]);
 
   // Update route A when driver moves during active ride
   useEffect(() => {
@@ -244,11 +247,17 @@ export default function DriverHomeScreen() {
       photoSeed: user.name,
     };
     try {
-      await api.updateRide(pendingRide.id, {
+      const acceptPayload: Record<string, unknown> = {
         status: "matched",
         driver: driverObj,
         driverId: user.id,
-      });
+      };
+      // Include driver's current GPS position so passenger sees it immediately
+      if (coords && !(Math.abs(coords.latitude) < 0.001 && Math.abs(coords.longitude) < 0.001)) {
+        acceptPayload["driverLat"] = coords.latitude;
+        acceptPayload["driverLng"] = coords.longitude;
+      }
+      await api.updateRide(pendingRide.id, acceptPayload);
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       const ride = { ...pendingRide, status: "matched" as const };
       setActiveRide(ride);

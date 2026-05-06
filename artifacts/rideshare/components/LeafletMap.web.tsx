@@ -200,6 +200,7 @@ window.addEventListener('message',function(e){
       if(d.pan) map.panTo([d.lat,d.lng],{animate:true,duration:1.5});
     }
     if(d.type==='updateDriverCar'){
+      if(Math.abs(d.lat)<0.001&&Math.abs(d.lng)<0.001) return;
       if(_driverCar){
         _driverCar.setLatLng([d.lat,d.lng]);
       } else {
