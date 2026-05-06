@@ -213,6 +213,9 @@ window.addEventListener('message',function(e){
     if(d.type==='updateRoute'){
       _drawRoute(d.aLat,d.aLng,d.bLat,d.bLng);
     }
+    if(d.type==='clearRoute'){
+      if(_liveRoute){map.removeLayer(_liveRoute);_liveRoute=null;}
+    }
     if(d.type==='setTap'){
       if(tapMarker) map.removeLayer(tapMarker);
       tapMarker=null;
@@ -288,6 +291,7 @@ export function LeafletMap({
   const prevDriverCarRef = useRef({ lat: driverCarLat, lng: driverCarLng });
   const prevRouteRef = useRef({ aLat: routeALat, aLng: routeALng, bLat: routeBLat, bLng: routeBLng });
   const prevDriverMarkersRef = useRef<DriverMarker[] | undefined>(undefined);
+  const prevDestRef = useRef({ destLat, destLng });
 
   // Build HTML once using initial values (stable srcDoc prevents iframe reloads)
   const html = useMemo(() => buildHtml(
@@ -357,6 +361,20 @@ export function LeafletMap({
     } catch {}
   }, [driverCarLat, driverCarLng, driverCarVehicleType, mapId]);
 
+  // Update destination pin when status changes (e.g. in_progress → show dropoff instead of pickup)
+  useEffect(() => {
+    const prev = prevDestRef.current;
+    if (prev.destLat === destLat && prev.destLng === destLng) return;
+    prevDestRef.current = { destLat, destLng };
+    if (destLat == null || destLng == null) return;
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ type: "setTap", mapId, lat: destLat, lng: destLng }),
+        "*",
+      );
+    } catch {}
+  }, [destLat, destLng, mapId]);
+
   // Update live route via postMessage
   useEffect(() => {
     const prev = prevRouteRef.current;
@@ -364,8 +382,16 @@ export function LeafletMap({
       prev.aLat !== routeALat || prev.aLng !== routeALng ||
       prev.bLat !== routeBLat || prev.bLng !== routeBLng;
     if (!changed) return;
-    if (routeALat == null || routeBLat == null) return;
     prevRouteRef.current = { aLat: routeALat, aLng: routeALng, bLat: routeBLat, bLng: routeBLng };
+    if (routeALat == null || routeALng == null || routeBLat == null || routeBLng == null) {
+      try {
+        iframeRef.current?.contentWindow?.postMessage(
+          JSON.stringify({ type: "clearRoute", mapId }),
+          "*",
+        );
+      } catch {}
+      return;
+    }
     try {
       iframeRef.current?.contentWindow?.postMessage(
         JSON.stringify({ type: "updateRoute", mapId, aLat: routeALat, aLng: routeALng, bLat: routeBLat, bLng: routeBLng }),
