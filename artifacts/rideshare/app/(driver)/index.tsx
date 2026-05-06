@@ -75,8 +75,10 @@ export default function DriverHomeScreen() {
   const [earnedTodayCents, setEarnedTodayCents] = useState(0);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
+  const [passengerCancelledBanner, setPassengerCancelledBanner] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rideStatusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // For ride map: track current route target
   const [routeBLat, setRouteBLat] = useState<number | null>(null);
@@ -200,6 +202,35 @@ export default function DriverHomeScreen() {
       if (locationRef.current) { clearInterval(locationRef.current); locationRef.current = null; }
     };
   }, [online, user?.id, !!activeRide]);
+
+  // Poll active ride status — detects passenger cancellation
+  useEffect(() => {
+    if (!activeRide?.id) {
+      if (rideStatusPollRef.current) { clearInterval(rideStatusPollRef.current); rideStatusPollRef.current = null; }
+      return;
+    }
+    const pollStatus = async () => {
+      try {
+        const serverRide = await api.getRideById(activeRide.id) as Record<string, unknown>;
+        const serverStatus = String(serverRide["status"] ?? "");
+        if (serverStatus === "cancelled") {
+          setActiveRide(null);
+          setRouteBLat(null);
+          setRouteBLng(null);
+          setCancelModalVisible(false);
+          setPassengerCancelledBanner(true);
+          setTimeout(() => setPassengerCancelledBanner(false), 8000);
+          if (Platform.OS !== "web") {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+          }
+        }
+      } catch {}
+    };
+    rideStatusPollRef.current = setInterval(pollStatus, 5000);
+    return () => {
+      if (rideStatusPollRef.current) { clearInterval(rideStatusPollRef.current); rideStatusPollRef.current = null; }
+    };
+  }, [activeRide?.id]);
 
   // Driver chat polling — active during an active ride
   useEffect(() => {
@@ -718,6 +749,14 @@ export default function DriverHomeScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {passengerCancelledBanner && (
+        <View style={[styles.cancelBanner, { backgroundColor: "#EF444415", borderColor: "#EF4444" }]}>
+          <Feather name="alert-circle" size={16} color="#EF4444" />
+          <Text style={[styles.cancelBannerTxt, { color: "#EF4444" }]}>
+            O passageiro cancelou a corrida.
+          </Text>
+        </View>
+      )}
       <ScrollView
         contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
@@ -923,6 +962,8 @@ const styles = StyleSheet.create({
   actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16 },
   actionBtnTxt: { fontSize: 16, fontFamily: "Inter_700Bold" },
   cancelBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 8 },
+  cancelBanner: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginTop: 12, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+  cancelBannerTxt: { fontSize: 14, fontWeight: "600", flex: 1 },
   cancelBtnTxt: { fontSize: 14, fontFamily: "Inter_500Medium" },
   // Cancel modal
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },

@@ -54,7 +54,7 @@ export default function RideScreen() {
   const ride = params.id ? getRide(params.id) : undefined;
 
   const pulse = useRef(new Animated.Value(0)).current;
-  const [etaSeconds, setEtaSeconds] = useState<number>(180);
+  const [etaSeconds, setEtaSeconds] = useState<number>(900);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [mpPaymentId, setMpPaymentId] = useState<string | null>(null);
@@ -191,7 +191,7 @@ export default function RideScreen() {
   useEffect(() => {
     if (!ride) return;
     if (ride.status !== "arriving" && ride.status !== "in_progress") return;
-    setEtaSeconds(ride.status === "arriving" ? 180 : ride.durationMinutes * 60);
+    setEtaSeconds(ride.status === "arriving" ? 900 : ride.durationMinutes * 60);
     const t = setInterval(() => setEtaSeconds((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(t);
   }, [ride?.id, ride?.status, ride?.durationMinutes]);
