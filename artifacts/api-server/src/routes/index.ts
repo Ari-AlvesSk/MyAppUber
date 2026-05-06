@@ -10,6 +10,7 @@ import paymentSettingsRouter from "./paymentSettings";
 import stripeRouter from "./stripe";
 import mpRouter from "./mercadopago";
 import notificationsRouter from "./notifications";
+import chatRouter from "./chat";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use("/admin/payment-settings", paymentSettingsRouter);
 router.use("/stripe", stripeRouter);
 router.use("/mp", mpRouter);
 router.use("/notifications", notificationsRouter);
+router.use("/chat", chatRouter);
 
 export default router;

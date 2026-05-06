@@ -30,7 +30,7 @@ A ride-hailing (rideshare) app for Brazil: Expo mobile + web frontend for passen
 - `artifacts/rideshare/components/LeafletMap.web.tsx` — Web Leaflet map (iframe-based)
 - `artifacts/rideshare/components/LeafletMap.tsx` — Native Leaflet map (WebView-based)
 - `lib/db/src/` — Mongoose models and `connectDB()`
-- `lib/db/src/models/` — User, Ride, Payment, Withdrawal, Coupon, PaymentSettings
+- `lib/db/src/models/` — User, Ride, Payment, Withdrawal, Coupon, PaymentSettings, ChatMessage
 
 ## Architecture decisions
 
@@ -68,6 +68,15 @@ A ride-hailing (rideshare) app for Brazil: Expo mobile + web frontend for passen
 - **Map props for tracking**: `driverCarLat/Lng` (secondary moving car marker), `routeALat/Lng/routeBLat/Lng` (updatable dashed route line)
 - **Finalize gate**: "Finalizar corrida" button only active when driver is within 300m of dropoff coordinates (or if no coords stored)
 - **Cancel with reason**: driver can cancel with one of 6 pre-set reasons; `cancelReason` stored in MongoDB
+
+## Chat & Compartilhamento
+
+- **Chat em corrida**: `GET/POST /api/chat/:rideId` — mensagens salvas no MongoDB (`mensagens_chat`), polling a cada 4s em ambas as telas
+- **Model**: `ChatMessage` (rideId, senderId, senderRole, text, createdAt) — exportado de `lib/db/src/models/chat.ts`
+- **Passageiro**: botão "message-circle" no card do motorista abre modal de chat; badge de não-lidas aparece quando chat fechado
+- **Motorista**: botão "Chat com passageiro" no painel da corrida (com badge); 6 balões de resposta rápida acima do input (ex: "Estou a caminho! 🚗")
+- **Notificação push**: ao enviar mensagem, o outro lado recebe push via `sendPushToUser`
+- **Compartilhar**: botão "Compartilhar no WhatsApp" visível nas fases matched/arriving/in_progress; usa `Share.share()` (native) ou `wa.me/?text=` (web)
 
 ## Gotchas
 

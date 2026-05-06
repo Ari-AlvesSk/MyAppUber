@@ -1,16 +1,19 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,7 +23,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useRides } from "@/context/RideContext";
 import { formatDistanceKm, formatPrice } from "@/data/mock";
 import { useColors } from "@/hooks/useColors";
-import { api } from "@/utils/api";
+import { api, type ChatMessage } from "@/utils/api";
 import type { Driver, Ride } from "@/types";
 
 const CANCEL_REASONS_PASSENGER = [
@@ -37,7 +40,7 @@ export default function RideScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
-  const { getRide, updateRide, cancelRide } = useRides();
+  const { getRide, updateRide, cancelRide, userId } = useRides();
 
   const ride = params.id ? getRide(params.id) : undefined;
 
@@ -46,6 +49,15 @@ export default function RideScreen() {
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [mpPaymentId, setMpPaymentId] = useState<string | null>(null);
+
+  // Chat state
+  const [chatVisible, setChatVisible] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatText, setChatText] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const [chatUnread, setChatUnread] = useState(0);
+  const chatScrollRef = useRef<any>(null);
+  const seenCountRef = useRef(0);
 
   // Live driver tracking state
   const [driverLat, setDriverLat] = useState<number | null>(null);
@@ -181,6 +193,37 @@ export default function RideScreen() {
     return () => loop.stop();
   }, [ride?.status, pulse]);
 
+  // Chat polling — active while ride has a driver
+  useEffect(() => {
+    if (!params.id) return;
+    if (ride?.status !== "matched" && ride?.status !== "arriving" && ride?.status !== "in_progress") return;
+    const fetchMsgs = async () => {
+      try {
+        const msgs = await api.getChatMessages(params.id);
+        setChatMessages(msgs);
+        if (!chatVisible && msgs.length > seenCountRef.current) {
+          setChatUnread(msgs.length - seenCountRef.current);
+        }
+        if (chatVisible) {
+          seenCountRef.current = msgs.length;
+          setChatUnread(0);
+          setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 50);
+        }
+      } catch {}
+    };
+    fetchMsgs();
+    const interval = setInterval(fetchMsgs, 4000);
+    return () => clearInterval(interval);
+  }, [params.id, ride?.status, chatVisible]);
+
+  // Scroll to bottom and mark read when chat opens
+  useEffect(() => {
+    if (chatVisible) {
+      seenCountRef.current = chatMessages.length;
+      setChatUnread(0);
+      setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: false }), 120);
+    }
+  }, [chatVisible]);
 
   if (!ride) {
     return (
@@ -193,6 +236,54 @@ export default function RideScreen() {
       </View>
     );
   }
+
+  const handleShare = useCallback(async () => {
+    if (!ride) return;
+    const statusText: Record<string, string> = {
+      searching: "Procurando motorista",
+      matched: "Motorista a caminho",
+      arriving: "Motorista chegando ao ponto",
+      in_progress: "Em viagem",
+      completed: "Corrida concluída",
+      cancelled: "Corrida cancelada",
+    };
+    const lines = [
+      "🚗 *Minha corrida — Paraúna Mobi*",
+      "",
+      `📍 *Origem:* ${ride.pickup.label}`,
+      `🏁 *Destino:* ${ride.dropoff.label}`,
+    ];
+    if (ride.driver) {
+      lines.push(`👨 *Motorista:* ${ride.driver.name}`);
+      if (ride.driver.car) {
+        lines.push(`🚘 *Veículo:* ${ride.driver.car}${ride.driver.plate ? ` (${ride.driver.plate})` : ""}`);
+      }
+    }
+    lines.push(`📊 *Status:* ${statusText[ride.status] ?? "Em andamento"}`);
+    lines.push("", "Acompanhe pelo app Paraúna Mobi! 📱");
+    const msg = lines.join("\n");
+    if (Platform.OS === "web") {
+      try { window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank"); } catch {}
+    } else {
+      try { await Share.share({ message: msg, title: "Minha corrida — Paraúna Mobi" }); } catch {}
+    }
+  }, [ride]);
+
+  const handleSendChatMessage = useCallback(async () => {
+    const text = chatText.trim();
+    if (!text || !userId || chatSending) return;
+    setChatSending(true);
+    setChatText("");
+    try {
+      await api.sendChatMessage(params.id, { senderId: userId, senderRole: "passenger", text });
+      const msgs = await api.getChatMessages(params.id);
+      setChatMessages(msgs);
+      seenCountRef.current = msgs.length;
+      setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 50);
+    } catch {} finally {
+      setChatSending(false);
+    }
+  }, [chatText, userId, chatSending, params.id]);
 
   const handleCancel = () => {
     setSelectedReason(null);
@@ -322,8 +413,15 @@ export default function RideScreen() {
                   </View>
                 </View>
                 <View style={styles.driverBtns}>
-                  <Pressable style={({ pressed }) => [styles.driverBtn, { backgroundColor: colors.muted, opacity: pressed ? 0.6 : 1 }]}>
-                    <Feather name="message-circle" size={16} color={colors.foreground} />
+                  <Pressable
+                    onPress={() => setChatVisible(true)}
+                    style={({ pressed }) => [styles.driverBtn, { backgroundColor: chatUnread > 0 ? colors.accent + "22" : colors.muted, opacity: pressed ? 0.6 : 1 }]}>
+                    {chatUnread > 0 && (
+                      <View style={[styles.chatUnreadBadge, { backgroundColor: colors.accent }]}>
+                        <Text style={[styles.chatUnreadTxt, { color: colors.accentForeground }]}>{chatUnread}</Text>
+                      </View>
+                    )}
+                    <Feather name="message-circle" size={16} color={chatUnread > 0 ? colors.accent : colors.foreground} />
                   </Pressable>
                   <Pressable style={({ pressed }) => [styles.driverBtn, { backgroundColor: colors.foreground, opacity: pressed ? 0.7 : 1 }]}>
                     <Feather name="phone" size={16} color={colors.background} />
@@ -442,8 +540,8 @@ export default function RideScreen() {
               onPress={handleCancel}
             />
           )}
-          {ride.status === "in_progress" && (
-            <PrimaryButton label="Compartilhar status da viagem" variant="secondary" onPress={() => {}} />
+          {(ride.status === "matched" || ride.status === "arriving" || ride.status === "in_progress") && (
+            <PrimaryButton label="Compartilhar no WhatsApp" variant="secondary" onPress={handleShare} />
           )}
           {(ride.status === "completed" || ride.status === "cancelled") && (
             <PrimaryButton label="Concluir" variant="primary" onPress={() => router.replace("/(tabs)")} />
@@ -451,7 +549,92 @@ export default function RideScreen() {
         </View>
       </View>
 
-      {/* Cancel reason modal */}
+      {/* Chat modal */}
+      <Modal
+        visible={chatVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setChatVisible(false)}
+      >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={styles.chatOverlay}>
+            <View style={[styles.chatSheet, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+              <View style={[styles.chatHandle, { backgroundColor: colors.border }]} />
+              <View style={[styles.chatHeaderRow, { borderBottomColor: colors.border }]}>
+                <View style={styles.chatHeaderLeft}>
+                  <View style={[styles.chatAvatar, { backgroundColor: colors.foreground }]}>
+                    <Text style={[styles.chatAvatarTxt, { color: colors.background }]}>
+                      {ride.driver?.name?.charAt(0) ?? "M"}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={[styles.chatName, { color: colors.foreground }]}>{ride.driver?.name ?? "Motorista"}</Text>
+                    <Text style={[styles.chatSub, { color: colors.mutedForeground }]}>Chat da corrida</Text>
+                  </View>
+                </View>
+                <Pressable
+                  onPress={() => setChatVisible(false)}
+                  style={({ pressed }) => [styles.chatClose, { backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <Feather name="x" size={18} color={colors.foreground} />
+                </Pressable>
+              </View>
+              <ScrollView
+                ref={chatScrollRef}
+                style={styles.chatMsgs}
+                contentContainerStyle={styles.chatMsgsContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {chatMessages.length === 0 ? (
+                  <View style={styles.chatEmpty}>
+                    <Feather name="message-circle" size={32} color={colors.mutedForeground} />
+                    <Text style={[styles.chatEmptyTxt, { color: colors.mutedForeground }]}>
+                      Nenhuma mensagem ainda.{"\n"}Mande um oi para o motorista!
+                    </Text>
+                  </View>
+                ) : (
+                  chatMessages.map((msg, i) => {
+                    const isMe = msg.senderRole === "passenger";
+                    return (
+                      <View key={msg._id ?? String(i)} style={[styles.msgRow, isMe ? styles.msgRowRight : styles.msgRowLeft]}>
+                        <View style={[styles.msgBubble, isMe ? { backgroundColor: colors.accent } : { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+                          <Text style={[styles.msgText, { color: isMe ? colors.accentForeground : colors.foreground }]}>{msg.text}</Text>
+                          <Text style={[styles.msgTime, { color: isMe ? colors.accentForeground : colors.mutedForeground, opacity: 0.7 }]}>
+                            {new Date(msg.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+              <View style={[styles.chatInputRow, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+                <TextInput
+                  style={[styles.chatInput, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+                  value={chatText}
+                  onChangeText={setChatText}
+                  placeholder="Mensagem..."
+                  placeholderTextColor={colors.mutedForeground}
+                  multiline
+                  maxLength={500}
+                />
+                <Pressable
+                  onPress={handleSendChatMessage}
+                  disabled={!chatText.trim() || chatSending}
+                  style={({ pressed }) => [
+                    styles.chatSendBtn,
+                    { backgroundColor: chatText.trim() ? colors.accent : colors.muted, opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <Feather name="send" size={18} color={chatText.trim() ? colors.accentForeground : colors.mutedForeground} />
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       <Modal
         visible={cancelModalVisible}
         transparent
@@ -578,4 +761,29 @@ const styles = StyleSheet.create({
   reasonRadioInner: { width: 10, height: 10, borderRadius: 5 },
   reasonTxt: { fontSize: 14, fontFamily: "Inter_500Medium", flex: 1 },
   modalActions: { gap: 10 },
+  chatUnreadBadge: { position: "absolute", top: 2, right: 2, width: 14, height: 14, borderRadius: 7, alignItems: "center", justifyContent: "center", zIndex: 1 },
+  chatUnreadTxt: { fontSize: 9, fontFamily: "Inter_700Bold" },
+  chatOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  chatSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, maxHeight: "90%" as any },
+  chatHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginTop: 10, marginBottom: 8 },
+  chatHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
+  chatHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  chatAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  chatAvatarTxt: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  chatName: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  chatSub: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 2 },
+  chatClose: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  chatMsgs: { flex: 1, paddingHorizontal: 16 },
+  chatMsgsContent: { paddingVertical: 16, gap: 8, flexGrow: 1, justifyContent: "flex-end" as any },
+  chatEmpty: { alignItems: "center", justifyContent: "center", paddingVertical: 40, gap: 12 },
+  chatEmptyTxt: { fontSize: 14, fontFamily: "Inter_500Medium", textAlign: "center" },
+  msgRow: { maxWidth: "80%" as any },
+  msgRowRight: { alignSelf: "flex-end" },
+  msgRowLeft: { alignSelf: "flex-start" },
+  msgBubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, gap: 4 },
+  msgText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  msgTime: { fontSize: 11, fontFamily: "Inter_400Regular", alignSelf: "flex-end" },
+  chatInputRow: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, borderTopWidth: 1 },
+  chatInput: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, fontFamily: "Inter_500Medium", borderWidth: 1 },
+  chatSendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
 });

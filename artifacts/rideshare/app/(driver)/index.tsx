@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -11,6 +12,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,7 +22,7 @@ import { useLocation } from "@/context/LocationContext";
 import { useAuth } from "@/context/AuthContext";
 import { formatPrice } from "@/data/mock";
 import { useColors } from "@/hooks/useColors";
-import { api } from "@/utils/api";
+import { api, type ChatMessage } from "@/utils/api";
 import type { Driver } from "@/types";
 
 type PendingRide = {
@@ -42,6 +44,15 @@ type PendingRide = {
 type ActiveRide = PendingRide & {
   status: "matched" | "arriving" | "in_progress";
 };
+
+const QUICK_REPLIES = [
+  "Estou a caminho! 🚗",
+  "Cheguei ao ponto de embarque",
+  "Aguardando você",
+  "Tudo certo! 👍",
+  "Um momento, já chego",
+  "Passageiro a bordo ✓",
+];
 
 const CANCEL_REASONS = [
   "Passageiro não encontrado",
@@ -71,6 +82,15 @@ export default function DriverHomeScreen() {
   const [routeBLat, setRouteBLat] = useState<number | null>(null);
   const [routeBLng, setRouteBLng] = useState<number | null>(null);
   const rideMapIframeRef = useRef<any>(null);
+
+  // Chat state
+  const [driverChatVisible, setDriverChatVisible] = useState(false);
+  const [driverChatMessages, setDriverChatMessages] = useState<ChatMessage[]>([]);
+  const [driverChatText, setDriverChatText] = useState("");
+  const [driverChatSending, setDriverChatSending] = useState(false);
+  const [driverChatUnread, setDriverChatUnread] = useState(0);
+  const driverChatScrollRef = useRef<any>(null);
+  const driverSeenCountRef = useRef(0);
 
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 24) : insets.top + 8;
@@ -181,6 +201,37 @@ export default function DriverHomeScreen() {
     };
   }, [online, user?.id, !!activeRide]);
 
+  // Driver chat polling — active during an active ride
+  useEffect(() => {
+    if (!activeRide?.id) return;
+    const fetchMsgs = async () => {
+      try {
+        const msgs = await api.getChatMessages(activeRide.id);
+        setDriverChatMessages(msgs);
+        if (!driverChatVisible && msgs.length > driverSeenCountRef.current) {
+          setDriverChatUnread(msgs.length - driverSeenCountRef.current);
+        }
+        if (driverChatVisible) {
+          driverSeenCountRef.current = msgs.length;
+          setDriverChatUnread(0);
+          setTimeout(() => driverChatScrollRef.current?.scrollToEnd({ animated: true }), 50);
+        }
+      } catch {}
+    };
+    fetchMsgs();
+    const interval = setInterval(fetchMsgs, 4000);
+    return () => clearInterval(interval);
+  }, [activeRide?.id, driverChatVisible]);
+
+  // Scroll to bottom and mark read when driver opens chat
+  useEffect(() => {
+    if (driverChatVisible) {
+      driverSeenCountRef.current = driverChatMessages.length;
+      setDriverChatUnread(0);
+      setTimeout(() => driverChatScrollRef.current?.scrollToEnd({ animated: false }), 120);
+    }
+  }, [driverChatVisible]);
+
   const fetchPending = useCallback(async () => {
     if (!user?.vehicleType || activeRide) return;
     try {
@@ -226,6 +277,22 @@ export default function DriverHomeScreen() {
       if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
     };
   }, [online, activeRide, fetchPending]);
+
+  const handleDriverSendChatMessage = useCallback(async (quickReply?: string) => {
+    const text = (quickReply ?? driverChatText).trim();
+    if (!text || !user?.id || driverChatSending || !activeRide?.id) return;
+    setDriverChatSending(true);
+    if (!quickReply) setDriverChatText("");
+    try {
+      await api.sendChatMessage(activeRide.id, { senderId: user.id, senderRole: "driver", text });
+      const msgs = await api.getChatMessages(activeRide.id);
+      setDriverChatMessages(msgs);
+      driverSeenCountRef.current = msgs.length;
+      setTimeout(() => driverChatScrollRef.current?.scrollToEnd({ animated: true }), 50);
+    } catch {} finally {
+      setDriverChatSending(false);
+    }
+  }, [driverChatText, user?.id, driverChatSending, activeRide?.id]);
 
   const handleToggleOnline = (val: boolean) => {
     setOnline(val);
@@ -434,6 +501,25 @@ export default function DriverHomeScreen() {
             </View>
           )}
 
+          {/* Chat button */}
+          <Pressable
+            onPress={() => setDriverChatVisible(true)}
+            style={({ pressed }) => [
+              styles.chatBtn,
+              { backgroundColor: colors.card, borderColor: driverChatUnread > 0 ? colors.accent : colors.border, opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <Feather name="message-circle" size={18} color={driverChatUnread > 0 ? colors.accent : colors.foreground} />
+            <Text style={[styles.chatBtnTxt, { color: driverChatUnread > 0 ? colors.accent : colors.foreground }]}>
+              Chat com passageiro
+            </Text>
+            {driverChatUnread > 0 && (
+              <View style={[styles.chatBadge, { backgroundColor: colors.accent }]}>
+                <Text style={[styles.chatBadgeTxt, { color: colors.accentForeground }]}>{driverChatUnread}</Text>
+              </View>
+            )}
+          </Pressable>
+
           {/* Action button */}
           <Pressable
             onPress={handleStatusAdvance}
@@ -521,6 +607,110 @@ export default function DriverHomeScreen() {
               </View>
             </View>
           </View>
+        </Modal>
+
+        {/* Chat modal */}
+        <Modal
+          visible={driverChatVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setDriverChatVisible(false)}
+        >
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <View style={styles.chatOverlay}>
+              <View style={[styles.chatSheet, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+                <View style={[styles.chatHandle, { backgroundColor: colors.border }]} />
+                <View style={[styles.chatHeaderRow, { borderBottomColor: colors.border }]}>
+                  <View style={styles.chatHeaderLeft}>
+                    <View style={[styles.chatAvatar, { backgroundColor: colors.accent }]}>
+                      <Feather name="user" size={18} color={colors.accentForeground} />
+                    </View>
+                    <View>
+                      <Text style={[styles.chatName, { color: colors.foreground }]}>Passageiro</Text>
+                      <Text style={[styles.chatSub, { color: colors.mutedForeground }]}>Chat da corrida</Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    onPress={() => setDriverChatVisible(false)}
+                    style={({ pressed }) => [styles.chatClose, { backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <Feather name="x" size={18} color={colors.foreground} />
+                  </Pressable>
+                </View>
+                <ScrollView
+                  ref={driverChatScrollRef}
+                  style={styles.chatMsgs}
+                  contentContainerStyle={styles.chatMsgsContent}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {driverChatMessages.length === 0 ? (
+                    <View style={styles.chatEmpty}>
+                      <Feather name="message-circle" size={32} color={colors.mutedForeground} />
+                      <Text style={[styles.chatEmptyTxt, { color: colors.mutedForeground }]}>
+                        Nenhuma mensagem ainda.{"\n"}Use as respostas rápidas abaixo!
+                      </Text>
+                    </View>
+                  ) : (
+                    driverChatMessages.map((msg, i) => {
+                      const isMe = msg.senderRole === "driver";
+                      return (
+                        <View key={msg._id ?? String(i)} style={[styles.msgRow, isMe ? styles.msgRowRight : styles.msgRowLeft]}>
+                          <View style={[styles.msgBubble, isMe ? { backgroundColor: colors.accent } : { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+                            <Text style={[styles.msgText, { color: isMe ? colors.accentForeground : colors.foreground }]}>{msg.text}</Text>
+                            <Text style={[styles.msgTime, { color: isMe ? colors.accentForeground : colors.mutedForeground, opacity: 0.7 }]}>
+                              {new Date(msg.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </ScrollView>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={[styles.quickRepliesRow, { borderTopColor: colors.border }]}
+                  contentContainerStyle={styles.quickRepliesContent}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {QUICK_REPLIES.map((qr) => (
+                    <Pressable
+                      key={qr}
+                      onPress={() => handleDriverSendChatMessage(qr)}
+                      style={({ pressed }) => [
+                        styles.quickReply,
+                        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                      ]}
+                    >
+                      <Text style={[styles.quickReplyTxt, { color: colors.foreground }]}>{qr}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <View style={[styles.chatInputRow, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+                  <TextInput
+                    style={[styles.chatInput, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+                    value={driverChatText}
+                    onChangeText={setDriverChatText}
+                    placeholder="Mensagem..."
+                    placeholderTextColor={colors.mutedForeground}
+                    multiline
+                    maxLength={500}
+                  />
+                  <Pressable
+                    onPress={() => handleDriverSendChatMessage()}
+                    disabled={!driverChatText.trim() || driverChatSending}
+                    style={({ pressed }) => [
+                      styles.chatSendBtn,
+                      { backgroundColor: driverChatText.trim() ? colors.accent : colors.muted, opacity: pressed ? 0.7 : 1 },
+                    ]}
+                  >
+                    <Feather name="send" size={18} color={driverChatText.trim() ? colors.accentForeground : colors.mutedForeground} />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
         </Modal>
       </View>
     );
@@ -750,4 +940,34 @@ const styles = StyleSheet.create({
   modalSecBtnTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   modalPriBtn: { flex: 2, alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 14 },
   modalPriBtnTxt: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  chatBtn: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5 },
+  chatBtnTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold", flex: 1 },
+  chatBadge: { minWidth: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  chatBadgeTxt: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  chatOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  chatSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, maxHeight: "90%" as any },
+  chatHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginTop: 10, marginBottom: 8 },
+  chatHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
+  chatHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  chatAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  chatName: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  chatSub: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 2 },
+  chatClose: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  chatMsgs: { flex: 1, paddingHorizontal: 16 },
+  chatMsgsContent: { paddingVertical: 16, gap: 8, flexGrow: 1, justifyContent: "flex-end" as any },
+  chatEmpty: { alignItems: "center", justifyContent: "center", paddingVertical: 40, gap: 12 },
+  chatEmptyTxt: { fontSize: 14, fontFamily: "Inter_500Medium", textAlign: "center" },
+  msgRow: { maxWidth: "80%" as any },
+  msgRowRight: { alignSelf: "flex-end" },
+  msgRowLeft: { alignSelf: "flex-start" },
+  msgBubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, gap: 4 },
+  msgText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  msgTime: { fontSize: 11, fontFamily: "Inter_400Regular", alignSelf: "flex-end" },
+  quickRepliesRow: { borderTopWidth: 1, maxHeight: 60 },
+  quickRepliesContent: { paddingHorizontal: 12, paddingVertical: 10, gap: 8, alignItems: "center" },
+  quickReply: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  quickReplyTxt: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  chatInputRow: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, borderTopWidth: 1 },
+  chatInput: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, fontFamily: "Inter_500Medium", borderWidth: 1 },
+  chatSendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
 });

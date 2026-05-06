@@ -66,6 +66,15 @@ export type DriverLocation = {
   updatedAt: number;
 };
 
+export type ChatMessage = {
+  _id: string;
+  rideId: string;
+  senderId: string;
+  senderRole: "passenger" | "driver";
+  text: string;
+  createdAt: string;
+};
+
 export const api = {
   loginUser: (email: string, password: string) =>
     request<{ ok: boolean; user: Record<string, unknown> }>("/users/login", {
@@ -171,4 +180,10 @@ export const api = {
 
   removePushToken: (userId: string) =>
     request<{ ok: boolean }>("/notifications/token", { method: "DELETE", body: JSON.stringify({ userId }) }),
+
+  getChatMessages: (rideId: string) =>
+    request<ChatMessage[]>(`/chat/${encodeURIComponent(rideId)}`),
+
+  sendChatMessage: (rideId: string, data: { senderId: string; senderRole: "passenger" | "driver"; text: string }) =>
+    request<ChatMessage>(`/chat/${encodeURIComponent(rideId)}`, { method: "POST", body: JSON.stringify(data) }),
 };
