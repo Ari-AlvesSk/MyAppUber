@@ -382,8 +382,6 @@ export default function AdminScreen() {
   const filteredDrivers = driverRequests.filter((r) => r.status === driverFilter);
   const sortedRides = useMemo(() => [...platformRides].sort((a, b) => b.createdAt - a.createdAt), [platformRides]);
   const completedRides = useMemo(() => platformRides.filter((r) => r.status === "completed"), [platformRides]);
-  const pixPendingRides = useMemo(() => platformRides.filter((r) => r.status === "awaiting_pix"), [platformRides]);
-  const [pixConfirmLoading, setPixConfirmLoading] = useState<Record<string, boolean>>({});
   const totalRevenueCents = useMemo(() => completedRides.reduce((s, r) => s + r.priceCents, 0), [completedRides]);
   const platformProfitCents = Math.round(totalRevenueCents * COMMISSION);
   const driverPayoutsCents = totalRevenueCents - platformProfitCents;
@@ -395,7 +393,7 @@ export default function AdminScreen() {
   const TABS = [
     { key: "motoristas", label: "Motoristas", icon: "users", badge: driverCounts.pending },
     { key: "viagens", label: "Viagens", icon: "navigation", badge: 0 },
-    { key: "financeiro", label: "Financeiro", icon: "trending-up", badge: pendingWithdrawals.length + pixPendingRides.length },
+    { key: "financeiro", label: "Financeiro", icon: "trending-up", badge: pendingWithdrawals.length },
     { key: "cupons", label: "Cupons", icon: "tag", badge: 0 },
     { key: "mapa", label: "Mapa", icon: "map-pin", badge: onlineDrivers.length },
     { key: "denuncias", label: "Denúncias", icon: "alert-triangle", badge: pendingReports },
@@ -589,62 +587,6 @@ export default function AdminScreen() {
             <StatCard label="Saques pendentes" value={formatPrice(totalPendingWithdraw)} icon="clock" iconColor="#F59E0B" accent="#F59E0B" />
           </View>
 
-          {/* Pix pendente de confirmação */}
-          <View style={s.sectionHeader}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Feather name="zap" size={14} color="#F59E0B" />
-              <Text style={[s.sectionTitle, { color: colors.foreground }]}>Pix Aguardando Verificação</Text>
-              {pixPendingRides.length > 0 && (
-                <View style={{ backgroundColor: "#F59E0B", borderRadius: 10, paddingHorizontal: 7, paddingVertical: 1 }}>
-                  <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>{pixPendingRides.length}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {pixPendingRides.length === 0 ? (
-            <EmptyState icon="zap" title="Nenhum Pix pendente" text="Não há pagamentos Pix aguardando verificação." />
-          ) : pixPendingRides.map((r) => (
-            <View key={r.id} style={[s.card, { backgroundColor: colors.card, borderColor: "#F59E0B55", borderWidth: 1 }]}>
-              <View style={s.cardTop}>
-                <View style={[s.avatar, { backgroundColor: "#F59E0B22" }]}>
-                  <Feather name="zap" size={16} color="#F59E0B" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.cardName, { color: colors.foreground }]}>
-                    {r.pickup.label} → {r.dropoff.label}
-                  </Text>
-                  <Text style={[s.cardSub, { color: colors.mutedForeground }]}>
-                    {new Date(r.createdAt).toLocaleString("pt-BR")} · {r.tierName}
-                  </Text>
-                </View>
-                <View style={{ alignItems: "flex-end", gap: 4 }}>
-                  <Text style={[s.withdrawAmt, { color: colors.foreground }]}>{formatPrice(r.priceCents)}</Text>
-                  <View style={{ backgroundColor: "#F59E0B22", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
-                    <Text style={{ color: "#F59E0B", fontSize: 11, fontWeight: "700" }}>PIX PENDENTE</Text>
-                  </View>
-                </View>
-              </View>
-              <View style={{ paddingHorizontal: 14, paddingBottom: 12, paddingTop: 6 }}>
-                <Pressable
-                  onPress={async () => {
-                    setPixConfirmLoading((p) => ({ ...p, [r.id]: true }));
-                    try {
-                      await api.updateRide(r.id, { status: "searching" });
-                      updateRide(r.id, { status: "searching" });
-                    } catch {}
-                    setPixConfirmLoading((p) => ({ ...p, [r.id]: false }));
-                  }}
-                  disabled={pixConfirmLoading[r.id]}
-                  style={({ pressed }) => [s.btnSm, { backgroundColor: colors.accent, opacity: pressed || pixConfirmLoading[r.id] ? 0.6 : 1, justifyContent: "center" }]}
-                >
-                  <Text style={[s.btnSmTxt, { color: colors.accentForeground }]}>
-                    {pixConfirmLoading[r.id] ? "Confirmando..." : "✓ Confirmar pagamento e acionar motorista"}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          ))}
 
           <View style={s.sectionHeader}>
             <Text style={[s.sectionTitle, { color: colors.foreground }]}>Solicitações de Saque</Text>

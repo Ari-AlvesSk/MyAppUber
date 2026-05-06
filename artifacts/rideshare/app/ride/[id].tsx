@@ -58,6 +58,8 @@ export default function RideScreen() {
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [mpPaymentId, setMpPaymentId] = useState<string | null>(null);
+  const [pixCheckState, setPixCheckState] = useState<"checking" | "not_found" | null>(null);
+  const [pixRetryIn, setPixRetryIn] = useState(0);
 
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [reportReason, setReportReason] = useState<string | null>(null);
@@ -174,18 +176,42 @@ export default function RideScreen() {
     if (!mpPaymentId) return;
     if (ride?.status !== "awaiting_pix") return;
 
+    let retryTimer: ReturnType<typeof setInterval> | null = null;
+
     const pollMp = async () => {
+      setPixCheckState("checking");
+      setPixRetryIn(0);
       try {
         const result = await api.getMpPixStatus(mpPaymentId);
         if (result.approved) {
+          setPixCheckState(null);
           updateRide(params.id, { status: "searching" });
+        } else {
+          setPixCheckState("not_found");
+          // countdown 5s before next check
+          let countdown = 5;
+          setPixRetryIn(countdown);
+          retryTimer = setInterval(() => {
+            countdown -= 1;
+            setPixRetryIn(countdown);
+            if (countdown <= 0 && retryTimer) {
+              clearInterval(retryTimer);
+              retryTimer = null;
+            }
+          }, 1000);
         }
-      } catch {}
+      } catch {
+        setPixCheckState("not_found");
+        setPixRetryIn(5);
+      }
     };
 
     pollMp();
     const interval = setInterval(pollMp, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (retryTimer) clearInterval(retryTimer);
+    };
   }, [mpPaymentId, ride?.status, params.id, updateRide]);
 
   useEffect(() => {
@@ -396,12 +422,18 @@ export default function RideScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 4 }}>
           {ride.status === "awaiting_pix" && (
             <View style={styles.searchBlock}>
-              <View style={[styles.pulseCore, { backgroundColor: "#F59E0B", width: 56, height: 56, borderRadius: 28 }]}>
-                <Feather name="zap" size={24} color="#fff" />
+              <View style={[styles.pulseCore, { backgroundColor: pixCheckState === "not_found" ? "#EF4444" : "#F59E0B", width: 56, height: 56, borderRadius: 28 }]}>
+                <Feather name={pixCheckState === "not_found" ? "alert-circle" : "zap"} size={24} color="#fff" />
               </View>
-              <Text style={[styles.title, { color: colors.foreground }]}>Aguardando confirmação do Pix</Text>
+              <Text style={[styles.title, { color: colors.foreground }]}>
+                {pixCheckState === "checking" ? "Verificando pagamento…" : pixCheckState === "not_found" ? "Pagamento não identificado" : "Aguardando confirmação do Pix"}
+              </Text>
               <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                Seu pagamento Pix está sendo verificado pelo administrador. O motorista será acionado em breve.
+                {pixCheckState === "checking"
+                  ? "Consultando o gateway de pagamento…"
+                  : pixCheckState === "not_found"
+                  ? `Pagamento ainda não confirmado pelo gateway.${pixRetryIn > 0 ? ` Verificando novamente em ${pixRetryIn}s…` : " Verificando novamente…"}`
+                  : "Aguarde enquanto confirmamos seu pagamento. O motorista será acionado automaticamente."}
               </Text>
             </View>
           )}
